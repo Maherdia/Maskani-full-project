@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "target": "es5",
+    "module": "commonjs",
+    "jsx": "preserve",
+    "strict": false,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "outDir": "./jsx-output",
+    "rootDir": "./src",
+    "allowJs": true,
+    "noEmit": false
+  },
+  "include": ["src/**/*.tsx"],
+  "exclude": ["node_modules"]
+} 

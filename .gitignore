@@ -1,0 +1,33 @@
+# Visual Studio
+.vs/
+.vscode/
+*.user
+*.suo
+
+# .NET
+[Bb]in/
+[Oo]bj/
+**/[Bb]in/
+**/[Oo]bj/
+
+# Node
+node_modules/
+**/node_modules/
+
+# Build output
+dist/
+build/
+
+# Environment
+.env
+.env.*
+
+# Logs
+*.log
+
+# SQL Server backups
+*.bak
+
+# OS
+Thumbs.db
+.DS_Store
