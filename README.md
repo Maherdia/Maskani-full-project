@@ -1,6 +1,6 @@
 # Maskani — Dormitory Booking Platform
 
-Maskani is a full-stack web application that connects university students with dormitory owners near universities in Jordan. The platform enables students to search, compare, and book dormitories, while providing property owners with tools to manage listings, rooms, and reservations through a dedicated dashboard.
+Maskani is a full-stack web application that connects university students with dormitory owners near universities in Jordan. The platform enables students to search, compare, and book dormitories, while allowing property owners to manage listings, rooms, and reservations through a dedicated dashboard.
 
 ---
 
@@ -29,7 +29,6 @@ Maskani is a full-stack web application that connects university students with d
 ### Security
 - JWT Authentication
 - Role-based authorization
-- Secure REST API
 - Protected routes
 
 ---
@@ -49,7 +48,7 @@ Maskani is a full-stack web application that connects university students with d
 
 ## Project Structure
 
-```
+```text
 Maskani
 │
 ├── Maskani Frontend
@@ -61,7 +60,6 @@ Maskani
 │   │   ├── hooks
 │   │   ├── contexts
 │   │   └── utils
-│   │
 │   ├── package.json
 │   └── vite.config.ts
 │
@@ -87,9 +85,7 @@ git clone https://github.com/Maherdia/Maskani-full-project.git
 cd Maskani-full-project
 ```
 
----
-
-## Frontend
+### Frontend
 
 ```bash
 cd "Maskani Frontend"
@@ -97,21 +93,14 @@ npm install
 npm run dev
 ```
 
-The frontend runs using Vite.
+The frontend uses **Vite** as the development server.
 
----
-
-## Backend
+### Backend
 
 1. Open the backend solution in **Visual Studio 2022**.
-2. Restore NuGet packages.
-3. Configure the SQL Server connection string in:
-
-```
-appsettings.json
-```
-
-4. Run the Web API.
+2. Restore the NuGet packages.
+3. Configure the SQL Server connection string in `appsettings.json`.
+4. Run the ASP.NET Core Web API.
 
 ---
 
@@ -124,7 +113,7 @@ appsettings.json
 - C#
 - SQL Server
 - JWT Authentication
-- REST APIs
+- RESTful APIs
 - Git
 - GitHub
 
@@ -136,7 +125,7 @@ appsettings.json
 - Online payment integration
 - Notifications
 - Image upload optimization
-- Mobile responsive improvements
+- Mobile responsiveness improvements
 
 ---
 
@@ -148,11 +137,11 @@ Software Engineer
 
 Graduation Project — Mu'tah University (January 2026)
 
-- GitHub: https://github.com/Maherdia
-- LinkedIn: https://www.linkedin.com/in/maher-dia
+- **GitHub:** https://github.com/Maherdia
+- **LinkedIn:** https://www.linkedin.com/in/maher-dia
 
 ---
 
 ## License
 
-This project is for educational purposes as a university graduation project.
+This project was developed as a university graduation project and is intended for educational and portfolio purposes.
