@@ -1,47 +1,158 @@
 # Maskani — Dormitory Booking Platform
 
-A full-stack web application that connects students with dormitory owners near universities in Jordan. Students can search, browse, and book dormitories, while owners manage their listings through a dedicated dashboard.
+Maskani is a full-stack web application that connects university students with dormitory owners near universities in Jordan. The platform enables students to search, compare, and book dormitories, while providing property owners with tools to manage listings, rooms, and reservations through a dedicated dashboard.
+
+---
 
 ## Features
-- Search and filter dormitory listings by location and price
-- Interactive map showing nearby dormitories
-- Student registration and booking management
-- Owner dashboard for managing properties and rooms
-- Admin dashboard for platform oversight
-- Role-based access control (student, owner, admin)
-- JWT-based authentication
+
+### Student
+- Search dormitories by location
+- Filter listings by price and preferences
+- View dormitories on an interactive map
+- Book available rooms
+- Manage bookings
+- Edit personal profile
+
+### Dormitory Owner
+- Owner registration and authentication
+- Add, edit, and delete properties
+- Manage rooms and availability
+- View booking requests
+- Manage property information
+
+### Administrator
+- Manage users
+- Monitor platform activity
+- Oversee dormitory listings
+
+### Security
+- JWT Authentication
+- Role-based authorization
+- Secure REST API
+- Protected routes
+
+---
 
 ## Tech Stack
+
 | Layer | Technologies |
-|-------|-------------|
-| Frontend | React.js, TypeScript, Tailwind CSS, Axios |
-| Backend | C#, ASP.NET Web API |
-| Database | SQL Server |
-| Tools | Git, GitHub, RESTful APIs, Layered Architecture |
+|-------|--------------|
+| Frontend | React, TypeScript, Tailwind CSS, Axios |
+| Backend | ASP.NET Core Web API (.NET 7), C# |
+| Database | Microsoft SQL Server |
+| Authentication | JWT |
+| Architecture | Layered Architecture, RESTful APIs |
+| Version Control | Git & GitHub |
+
+---
 
 ## Project Structure
-Maskani/
-├── Maskani Frontend/        # React.js client application
-│   ├── src/
-│   │   ├── components/      # Reusable UI components
-│   │   ├── pages/           # Route-level pages
-│   │   ├── lib/api/         # API integration layer
-│   │   └── services/        # Business logic
-└── Maskani Backend/         # ASP.NET Web API server
-└── Maskani Project/     # API controllers and services
+
+```
+Maskani
+│
+├── Maskani Frontend
+│   ├── public
+│   ├── src
+│   │   ├── components
+│   │   ├── pages
+│   │   ├── services
+│   │   ├── hooks
+│   │   ├── contexts
+│   │   └── utils
+│   │
+│   ├── package.json
+│   └── vite.config.ts
+│
+├── Maskani Backend
+│   └── Maskani Project
+│       ├── MaskaniAPIs
+│       ├── DataAccessLayer
+│       ├── MaskaniBusinessLayer
+│       └── MaskaniEntities
+│
+├── README.md
+└── .gitignore
+```
+
+---
+
 ## Getting Started
 
-### Frontend
+### Clone the repository
+
+```bash
+git clone https://github.com/Maherdia/Maskani-full-project.git
+cd Maskani-full-project
+```
+
+---
+
+## Frontend
+
 ```bash
 cd "Maskani Frontend"
 npm install
 npm run dev
 ```
 
-### Backend
-Open `Maskani Backend` in Visual Studio and run the project.
-Make sure SQL Server is running and the connection string is configured in `appsettings.json`.
+The frontend runs using Vite.
 
-## Developed By
-**Mohammed Maher Dia** — Graduation Project, Mu'tah University (January 2026)  
-[LinkedIn](https://linkedin.com/in/maher-dia) • [GitHub](https://github.com/Maherdia)
+---
+
+## Backend
+
+1. Open the backend solution in **Visual Studio 2022**.
+2. Restore NuGet packages.
+3. Configure the SQL Server connection string in:
+
+```
+appsettings.json
+```
+
+4. Run the Web API.
+
+---
+
+## Technologies Used
+
+- React
+- TypeScript
+- Tailwind CSS
+- ASP.NET Core Web API
+- C#
+- SQL Server
+- JWT Authentication
+- REST APIs
+- Git
+- GitHub
+
+---
+
+## Future Improvements
+
+- Email verification
+- Online payment integration
+- Notifications
+- Image upload optimization
+- Mobile responsive improvements
+
+---
+
+## Developer
+
+**Mohammed Maher Dia**
+
+Software Engineer
+
+Graduation Project — Mu'tah University (January 2026)
+
+- GitHub: https://github.com/Maherdia
+- LinkedIn: https://www.linkedin.com/in/maher-dia
+
+---
+
+## License
+
+This project is for educational purposes as a university graduation project.
