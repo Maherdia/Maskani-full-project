@@ -11,7 +11,6 @@ namespace MaskaniDataAccess.Interfaces
     public interface IUserRepository:IBasicRepository<clsUserDTO,clsAddUserDTO,clsUpdateUserDTO>
     {
         public Task<bool> ChangePasswordAsync(int ID, string newPassword);
-        public Task<clsUserDTO> LoginAsync(string email, string Password);
         public Task<clsUserDTO> GetUserByEmailAsync(string email);
         public Task<clsUserDTO?> GetUserByPersonID(int PersonID);
     }

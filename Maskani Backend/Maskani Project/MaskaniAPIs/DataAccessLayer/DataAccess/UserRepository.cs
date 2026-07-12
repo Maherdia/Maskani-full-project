@@ -11,7 +11,10 @@ namespace MaskaniDataAccess.DataAccess
 {
     public class UserRepository : BaseRepository, IUserRepository
     {
-        public UserRepository(IConfiguration configuration) : base(configuration.GetConnectionString("DefaultConnection")) { }
+        public UserRepository(IConfiguration configuration)
+            : base(configuration.GetConnectionString("DefaultConnection"))
+        {
+        }
 
         public async Task<int> AddAsync(clsAddUserDTO createDTO)
         {
@@ -21,25 +24,30 @@ namespace MaskaniDataAccess.DataAccess
                 cmd.Parameters.AddWithValue("@LastName", createDTO.LastName);
                 cmd.Parameters.AddWithValue("@Phone", createDTO.Phone);
                 cmd.Parameters.AddWithValue("@Email", createDTO.Email);
-                cmd.Parameters.AddWithValue("@Password",(createDTO.Password));
+                cmd.Parameters.AddWithValue("@Password", createDTO.Password);
                 cmd.Parameters.AddWithValue("@Role", "User");
+
                 var idParam = new SqlParameter("@NewUserID", SqlDbType.Int)
                 {
                     Direction = ParameterDirection.Output
                 };
+
                 cmd.Parameters.Add(idParam);
-            },async cmd => {
+
+            }, async cmd =>
+            {
                 var result = await cmd.ExecuteScalarAsync();
                 return Convert.ToInt32(result);
             });
         }
 
-        public async Task<bool> ChangePasswordAsync(int UserID, string newPassword)
+        public async Task<bool> ChangePasswordAsync(int userID, string newPassword)
         {
             return await ExecuteCommandAsync("SP_ChangeUserPassword", cmd =>
             {
-                cmd.Parameters.AddWithValue("@UserID", UserID);
+                cmd.Parameters.AddWithValue("@UserID", userID);
                 cmd.Parameters.AddWithValue("@NewPassword", newPassword);
+
             }, async cmd => await cmd.ExecuteNonQueryAsync() > 0);
         }
 
@@ -48,6 +56,7 @@ namespace MaskaniDataAccess.DataAccess
             return await ExecuteCommandAsync("SP_DeleteUser", cmd =>
             {
                 cmd.Parameters.AddWithValue("@UserID", id);
+
             }, async cmd => await cmd.ExecuteNonQueryAsync() > 0);
         }
 
@@ -56,7 +65,9 @@ namespace MaskaniDataAccess.DataAccess
             return await ExecuteCommandAsync("SP_GetAllUsers", cmd => { }, async cmd =>
             {
                 var userList = new List<clsUserDTO>();
+
                 using var reader = await cmd.ExecuteReaderAsync();
+
                 while (await reader.ReadAsync())
                 {
                     userList.Add(new clsUserDTO(
@@ -69,6 +80,7 @@ namespace MaskaniDataAccess.DataAccess
                         null
                     ));
                 }
+
                 return userList;
             });
         }
@@ -78,10 +90,13 @@ namespace MaskaniDataAccess.DataAccess
             return await ExecuteCommandAsync("SP_GetUserInfoByID", cmd =>
             {
                 cmd.Parameters.AddWithValue("@UserID", id);
+
             }, async cmd =>
             {
                 clsUserDTO? user = null;
+
                 using var reader = await cmd.ExecuteReaderAsync();
+
                 if (await reader.ReadAsync())
                 {
                     user = new clsUserDTO(
@@ -94,35 +109,16 @@ namespace MaskaniDataAccess.DataAccess
                         null
                     );
                 }
+
                 return user;
             });
         }
 
-        public async Task<clsUserDTO?> LoginAsync(string email, string password)
+        [Obsolete("Authentication is handled in UserService using PBKDF2.")]
+        public Task<clsUserDTO?> LoginAsync(string email, string password)
         {
-            return await ExecuteCommandAsync("SP_GetEmailAndPasswordFormUser", cmd =>
-            {
-                cmd.Parameters.AddWithValue("@Email", email);
-                cmd.Parameters.AddWithValue("@Password", password);
-                cmd.Parameters.AddWithValue("@Role", "User");
-            },
-            async cmd =>
-            {
-                using var reader = await cmd.ExecuteReaderAsync();
-                if (await reader.ReadAsync())
-                {
-                    return new clsUserDTO(
-                        reader.GetInt32(reader.GetOrdinal("PersonID")),
-                        reader.GetString(reader.GetOrdinal("FirstName")),
-                        reader.GetString(reader.GetOrdinal("LastName")),
-                        reader.GetString(reader.GetOrdinal("Phone")),
-                        reader.GetString(reader.GetOrdinal("Email")),
-                        reader.GetInt32(reader.GetOrdinal("UserID")),
-                        null
-                    );
-                }
-                return null;
-            });
+            throw new NotSupportedException(
+                "Use GetUserByEmailAsync() and verify the password in UserService.");
         }
 
         public async Task<bool> UpdateAsync(clsUpdateUserDTO updateDTO)
@@ -136,14 +132,20 @@ namespace MaskaniDataAccess.DataAccess
                 cmd.Parameters.AddWithValue("@Email", updateDTO.Email);
                 cmd.Parameters.AddWithValue("@Password", updateDTO.Password);
                 cmd.Parameters.AddWithValue("@Role", "User");
+
             }, async cmd => await cmd.ExecuteNonQueryAsync() > 0);
         }
 
         public Task<clsUserDTO?> GetUserByEmailAsync(string email)
         {
-            return ExecuteCommandAsync("SP_GetUserByEmail", cmd => cmd.Parameters.AddWithValue("@Email", email), async cmd =>
+            return ExecuteCommandAsync("SP_GetUserByEmail", cmd =>
+            {
+                cmd.Parameters.AddWithValue("@Email", email);
+
+            }, async cmd =>
             {
                 using var reader = await cmd.ExecuteReaderAsync();
+
                 if (await reader.ReadAsync())
                 {
                     return new clsUserDTO(
@@ -153,19 +155,24 @@ namespace MaskaniDataAccess.DataAccess
                         reader.GetString(reader.GetOrdinal("Phone")),
                         reader.GetString(reader.GetOrdinal("Email")),
                         reader.GetInt32(reader.GetOrdinal("UserID")),
-                        null);
-
+                        reader.GetString(reader.GetOrdinal("Password"))
+                    );
                 }
-                else
-                    return null;
+
+                return null;
             });
         }
 
-        public Task<clsUserDTO?> GetUserByPersonID(int PersonID)
+        public Task<clsUserDTO?> GetUserByPersonID(int personID)
         {
-            return ExecuteCommandAsync("SP_GetUserByPersonID", cmd => cmd.Parameters.AddWithValue("@PersonID", PersonID), async cmd =>
+            return ExecuteCommandAsync("SP_GetUserByPersonID", cmd =>
+            {
+                cmd.Parameters.AddWithValue("@PersonID", personID);
+
+            }, async cmd =>
             {
                 using var reader = await cmd.ExecuteReaderAsync();
+
                 if (await reader.ReadAsync())
                 {
                     return new clsUserDTO(
@@ -175,12 +182,11 @@ namespace MaskaniDataAccess.DataAccess
                         reader.GetString(reader.GetOrdinal("Phone")),
                         reader.GetString(reader.GetOrdinal("Email")),
                         reader.GetInt32(reader.GetOrdinal("UserID")),
-                        null);
+                        null
+                    );
                 }
-                else
-                {
-                    return null;
-                }
+
+                return null;
             });
         }
     }

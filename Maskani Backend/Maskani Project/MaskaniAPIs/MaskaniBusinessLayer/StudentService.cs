@@ -29,14 +29,28 @@ namespace MaskaniBusinessLayer
         public async Task<IEnumerable<clsStudentDTO>> GetAllStudentsAsync() => await _studentRepository.GetAllAsync();
         public async Task<clsStudentDTO?> GetStudentByIdAsync(int studentId) => await _studentRepository.GetByIdAsync(studentId);
         public async Task<bool> ChangePasswordAsync(int studentId, string newPassword) => await _studentRepository.ChangePasswordAsync(studentId, newPassword);
-        public async Task<clsStudentDTO?> LoginAsync(string email, string password) => await _studentRepository.LoginAsync(email, clsHashing.HashPassword(password));
+        public async Task<clsStudentDTO?> LoginAsync(string email, string password)
+        {
+            var student = await _studentRepository.GetStudentByEmail(email);
+
+            if (student == null)
+                return null;
+
+            if (!clsHashing.VerifyPassword(password, student.Password))
+                return null;
+
+            student.Password = null;
+
+            return student;
+        }
         public async Task<bool> VerifyPasswordAsync(string email, string password)
         {
             var student = await _studentRepository.GetStudentByEmail(email);
+
             if (student == null)
                 return false;
-            string hasedPassword = clsHashing.HashPassword(password);
-            return clsHashing.VerifyPassword(password, hasedPassword);
+
+            return clsHashing.VerifyPassword(password, student.Password);
         }
         public async Task<clsStudentDTO?> GetStudentByPersonIDAsync(int PersonID) => await _studentRepository.GetStudentByPersonID(PersonID);
         public async Task<clsStudentDTO> GetStudentByEmailAsync(string email) => await _studentRepository.GetStudentByEmail(email);

@@ -79,21 +79,22 @@ namespace MaskaniDataAccess.DataAccess
                 cmd.Parameters.AddWithValue("@Email", email);
             }, async cmd =>
             {
-                clsOwnerDTO? owner = null;
                 using var reader = await cmd.ExecuteReaderAsync();
+
                 if (await reader.ReadAsync())
                 {
-                    owner = new clsOwnerDTO(
+                    return new clsOwnerDTO(
                         reader.GetInt32(reader.GetOrdinal("PersonID")),
                         reader.GetString(reader.GetOrdinal("FirstName")),
                         reader.GetString(reader.GetOrdinal("LastName")),
                         reader.GetString(reader.GetOrdinal("Phone")),
                         reader.GetString(reader.GetOrdinal("Email")),
                         reader.GetInt32(reader.GetOrdinal("OwnerID")),
-                        null
+                        reader.GetString(reader.GetOrdinal("Password"))
                     );
                 }
-                return owner;
+
+                return null;
             });
         }
 
@@ -143,30 +144,11 @@ namespace MaskaniDataAccess.DataAccess
             });
         }
 
-        public async Task<clsOwnerDTO?> LoginAsync(string email, string password)
+        [Obsolete("Login is now handled in OwnerService using PBKDF2 verification.")]
+        public Task<clsOwnerDTO?> LoginAsync(string email, string password)
         {
-            return await ExecuteCommandAsync("SP_GetEmailAndPasswordFormOwner", cmd =>
-            {
-                cmd.Parameters.AddWithValue("@Email", email);
-                cmd.Parameters.AddWithValue("@Password", password);
-                cmd.Parameters.AddWithValue("@Role", "Owner");
-            }, async cmd =>
-            {
-                using var reader = await cmd.ExecuteReaderAsync();
-                if (await reader.ReadAsync())
-                {
-                    return new clsOwnerDTO(
-                        reader.GetInt32(reader.GetOrdinal("PersonID")),
-                        reader.GetString(reader.GetOrdinal("FirstName")),
-                        reader.GetString(reader.GetOrdinal("LastName")),
-                        reader.GetString(reader.GetOrdinal("Phone")),
-                        reader.GetString(reader.GetOrdinal("Email")),
-                        reader.GetInt32(reader.GetOrdinal("OwnerID")),
-                        null
-                    );
-                }
-                return null;
-            });
+            throw new NotSupportedException(
+                "Repository authentication has been removed. Use GetByEmailAsync().");
         }
 
         public async Task<bool> UpdateAsync(clsUpdateOwnerDTO updateDTO)

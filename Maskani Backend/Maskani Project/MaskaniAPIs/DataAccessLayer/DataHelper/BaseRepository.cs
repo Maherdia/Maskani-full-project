@@ -50,8 +50,7 @@ namespace MaskaniDataAccessLayer.DataHelper
             }
             catch (Exception ex)
             {
-                //_logger?.LogError(ex, "An error occurred while executing the command: {StoredProc}", storedProc);
-                throw new Exception("An error occurred while executing the command.", ex);
+                throw new Exception(ex.ToString());
             }
         }
     }

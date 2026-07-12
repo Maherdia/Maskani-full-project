@@ -38,15 +38,29 @@ namespace MaskaniBusinessLayer
         public async Task<clsOwnerDTO?> GetOwnerByIdAsync(int ownerId) => await _ownerRepository.GetByIdAsync(ownerId);
         public async Task<bool> ChangePasswordAsync(int ownerId, string newPassword) => 
             await _ownerRepository.ChangePasswordAsync(ownerId, newPassword);
-        public async Task<clsOwnerDTO?> LoginAsync(string email, string password) =>
-            await _ownerRepository.LoginAsync(email, clsHashing.HashPassword(password));
+        public async Task<clsOwnerDTO?> LoginAsync(string email, string password)
+        {
+            var owner = await _ownerRepository.GetByEmailAsync(email);
+
+            if (owner == null)
+                return null;
+
+            if (!clsHashing.VerifyPassword(password, owner.Password))
+                return null;
+
+            owner.Password = null;
+
+            return owner;
+        }
+
         public async Task<bool> VerifyPasswordAsync(string email, string password)
         {
             var owner = await _ownerRepository.GetByEmailAsync(email);
+
             if (owner == null)
                 return false;
-            string hashedPassword = clsHashing.HashPassword(password);
-            return clsHashing.VerifyPassword(password, hashedPassword);
+
+            return clsHashing.VerifyPassword(password, owner.Password);
         }
         public async Task<clsOwnerDTO> GetOwnerByPersonID(int personID)=> await _ownerRepository.GetOwnerByPersonID(personID);
         public async Task<clsOwnerDTO?> GetByEmailAsync(string email)=> await _ownerRepository.GetByEmailAsync(email);

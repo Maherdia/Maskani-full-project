@@ -110,32 +110,12 @@ namespace MaskaniDataAccess.DataAccess
             }, async cmd => await cmd.ExecuteNonQueryAsync() > 0);
         }
 
-        public async Task<clsStudentDTO?> LoginAsync(string email, string password)
+        [Obsolete("Login is now handled in StudentService using PBKDF2 verification.")]
+        public Task<clsStudentDTO?> LoginAsync(string email, string password)
         {
-            return await ExecuteCommandAsync("SP_GetEmailAndPasswordFormStudent", cmd =>
-            {
-                cmd.Parameters.AddWithValue("@Email", email);
-                cmd.Parameters.AddWithValue("@Password", password);
-                cmd.Parameters.AddWithValue("@Role", "Student");
-            }, async cmd =>
-            {
-                using var reader = await cmd.ExecuteReaderAsync();
-                if (await reader.ReadAsync())
-                {
-                    return new clsStudentDTO(
-                        reader.GetInt32(reader.GetOrdinal("PersonID")),
-                        reader.GetString(reader.GetOrdinal("FirstName")),
-                        reader.GetString(reader.GetOrdinal("LastName")),
-                        reader.GetString(reader.GetOrdinal("Phone")),
-                        reader.GetString(reader.GetOrdinal("Email")),
-                        reader.GetInt32(reader.GetOrdinal("StudentID")),
-                        null
-                    );
-                }
-                return null;
-            });
+            throw new NotSupportedException(
+                "Repository authentication has been removed. Use GetStudentByEmail().");
         }
-
         public  Task <clsStudentDTO?> GetStudentByEmail(string email)
         {
             return ExecuteCommandAsync("SP_GetStudentByEmail", cmd => cmd.Parameters.AddWithValue("@Email", email), async cmd =>
@@ -151,7 +131,7 @@ namespace MaskaniDataAccess.DataAccess
                         reader.GetString(reader.GetOrdinal("Phone")),
                         reader.GetString(reader.GetOrdinal("Email")),
                         reader.GetInt32(reader.GetOrdinal("StudentID")),
-                        null);
+                        reader.GetString(reader.GetOrdinal("Password")));
                     }
                     return student;
                 });
