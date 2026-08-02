@@ -1,161 +1,404 @@
-﻿using DataAccessLayer;
+﻿using System.Data;
+using DataAccessLayer;
 using MaskaniDataAccess.DTOs;
 using MaskaniDataAccess.Interfaces;
 using MaskaniDataAccessLayer.DataHelper;
 using MaskaniDataAccessLayer.DTOs;
+using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Configuration;
-using System;
-using System.Collections.Generic;
-using System.Data;
-using System.Data.SqlClient;
-using System.Threading.Tasks;
 
 namespace MaskaniDataAccess.DataAccess
 {
     public class StudentRepository : BaseRepository, IStudentRepository
     {
         public StudentRepository(IConfiguration configuration)
-            : base(configuration.GetConnectionString("DefaultConnection"))
+            : base(
+                configuration.GetConnectionString("DefaultConnection")
+                ?? throw new InvalidOperationException(
+                    "DefaultConnection is missing."))
         {
         }
 
-        public async Task<int> AddAsync(clsAddStudentDTO createDTO)
+        public async Task<int> AddAsync(
+            clsAddStudentDTO createDTO)
         {
-            return await ExecuteCommandAsync("SP_AddNewStudent", cmd =>
-            {
-                cmd.Parameters.AddWithValue("@FirstName", createDTO.FirstName);
-                cmd.Parameters.AddWithValue("@LastName", createDTO.LastName);
-                cmd.Parameters.AddWithValue("@Phone", createDTO.Phone);
-                cmd.Parameters.AddWithValue("@Email", createDTO.Email);
-                cmd.Parameters.AddWithValue("@Password",(createDTO.Password));
-                cmd.Parameters.AddWithValue("@Role", "Student");
-                var idParam = new SqlParameter("@NewStudentID", SqlDbType.Int)
+            ArgumentNullException.ThrowIfNull(createDTO);
+
+            return await ExecuteCommandAsync(
+                "SP_AddNewStudent",
+                cmd =>
                 {
-                    Direction = ParameterDirection.Output
-                };
-                cmd.Parameters.Add(idParam);
-            }, async cmd => Convert.ToInt32(await cmd.ExecuteScalarAsync()));
-        }
+                    cmd.Parameters.Add(
+                        "@FirstName",
+                        SqlDbType.NVarChar).Value =
+                        createDTO.FirstName;
 
-        public async Task<bool> DeleteAsync(int id)
-        {
-            return await ExecuteCommandAsync("SP_DeleteStudent",
-                cmd => cmd.Parameters.AddWithValue("@StudentID", id),
-                async cmd => await cmd.ExecuteNonQueryAsync() > 0);
-        }
+                    cmd.Parameters.Add(
+                        "@LastName",
+                        SqlDbType.NVarChar).Value =
+                        createDTO.LastName;
 
-        public async Task<List<clsStudentDTO>> GetAllAsync()
-        {
-            return await ExecuteCommandAsync("SP_GetAllStudent", cmd => { }, async cmd =>
-            {
-                var studentList = new List<clsStudentDTO>();
-                using var reader = await cmd.ExecuteReaderAsync();
-                while (await reader.ReadAsync())
+                    cmd.Parameters.Add(
+                        "@Phone",
+                        SqlDbType.NVarChar).Value =
+                        createDTO.Phone;
+
+                    cmd.Parameters.Add(
+                        "@Email",
+                        SqlDbType.NVarChar).Value =
+                        createDTO.Email;
+
+                    cmd.Parameters.Add(
+                        "@Password",
+                        SqlDbType.NVarChar).Value =
+                        createDTO.Password;
+
+                    cmd.Parameters.Add(
+                        "@Role",
+                        SqlDbType.NVarChar).Value =
+                        "Student";
+
+                    cmd.Parameters.Add(
+                        new SqlParameter(
+                            "@NewStudentID",
+                            SqlDbType.Int)
+                        {
+                            Direction =
+                                ParameterDirection.Output
+                        });
+                },
+                async cmd =>
                 {
-                    studentList.Add(new clsStudentDTO(
-                        reader.GetInt32(reader.GetOrdinal("PersonID")),
-                        reader.GetString(reader.GetOrdinal("FirstName")),
-                        reader.GetString(reader.GetOrdinal("LastName")),
-                        reader.GetString(reader.GetOrdinal("Phone")),
-                        reader.GetString(reader.GetOrdinal("Email")),
-                        reader.GetInt32(reader.GetOrdinal("StudentID")),
-                        reader.GetString(reader.GetOrdinal("Password"))
-                    ));
-                }
-                return studentList;
-            });
-        }
+                    await cmd.ExecuteNonQueryAsync();
 
-        public async Task<clsStudentDTO?> GetByIdAsync(int id)
-        {
-            return await ExecuteCommandAsync("SP_GetStudentInfoByID", cmd => cmd.Parameters.AddWithValue("@StudentID", id), async cmd =>
-            {
-                using var reader = await cmd.ExecuteReaderAsync();
-                if (await reader.ReadAsync())
-                {
-                    return new clsStudentDTO(
-                        reader.GetInt32(reader.GetOrdinal("PersonID")),
-                        reader.GetString(reader.GetOrdinal("FirstName")),
-                        reader.GetString(reader.GetOrdinal("LastName")),
-                        reader.GetString(reader.GetOrdinal("Phone")),
-                        reader.GetString(reader.GetOrdinal("Email")),
-                        reader.GetInt32(reader.GetOrdinal("StudentID")),
-                        null
-                    );
-                }
-                return null;
-            });
-        }
+                    object? outputValue =
+                        cmd.Parameters["@NewStudentID"].Value;
 
-        public async Task<bool> UpdateAsync(clsUpdateStudentDTO updateDTO)
-        {
-            return await ExecuteCommandAsync("SP_UpdateStudent", cmd =>
-            {
-                cmd.Parameters.AddWithValue("@StudentID", updateDTO.StudentID);
-                cmd.Parameters.AddWithValue("@FirstName", updateDTO.FirstName);
-                cmd.Parameters.AddWithValue("@LastName", updateDTO.LastName);
-                cmd.Parameters.AddWithValue("@Phone", updateDTO.Phone);
-                cmd.Parameters.AddWithValue("@Email", updateDTO.Email);
-                cmd.Parameters.AddWithValue("@Password", updateDTO.Password);
-                cmd.Parameters.AddWithValue("@Role", "Student");
-            }, async cmd => await cmd.ExecuteNonQueryAsync() > 0);
-        }
-
-        public async Task<bool> ChangePasswordAsync(int studentID, string newPassword)
-        {
-            return await ExecuteCommandAsync("SP_ChangeStudentPassword", cmd =>
-            {
-                cmd.Parameters.AddWithValue("@StudentID", studentID);
-                cmd.Parameters.AddWithValue("@NewPassword", newPassword);
-            }, async cmd => await cmd.ExecuteNonQueryAsync() > 0);
-        }
-
-        [Obsolete("Login is now handled in StudentService using PBKDF2 verification.")]
-        public Task<clsStudentDTO?> LoginAsync(string email, string password)
-        {
-            throw new NotSupportedException(
-                "Repository authentication has been removed. Use GetStudentByEmail().");
-        }
-        public  Task <clsStudentDTO?> GetStudentByEmail(string email)
-        {
-            return ExecuteCommandAsync("SP_GetStudentByEmail", cmd => cmd.Parameters.AddWithValue("@Email", email), async cmd =>
-                {
-                    clsStudentDTO? student = null;
-                    using var reader = await cmd.ExecuteReaderAsync();
-                    if (await reader.ReadAsync())
+                    if (outputValue == null ||
+                        outputValue == DBNull.Value)
                     {
-                        student = new clsStudentDTO(
-                        reader.GetInt32(reader.GetOrdinal("PersonID")),
-                        reader.GetString(reader.GetOrdinal("FirstName")),
-                        reader.GetString(reader.GetOrdinal("LastName")),
-                        reader.GetString(reader.GetOrdinal("Phone")),
-                        reader.GetString(reader.GetOrdinal("Email")),
-                        reader.GetInt32(reader.GetOrdinal("StudentID")),
-                        reader.GetString(reader.GetOrdinal("Password")));
+                        throw new InvalidOperationException(
+                            "SP_AddNewStudent did not return " +
+                            "@NewStudentID.");
                     }
-                    return student;
+
+                    int newStudentId =
+                        Convert.ToInt32(outputValue);
+
+                    if (newStudentId <= 0)
+                    {
+                        throw new InvalidOperationException(
+                            "SP_AddNewStudent returned an invalid " +
+                            "student ID.");
+                    }
+
+                    return newStudentId;
                 });
         }
 
-        public Task<clsStudentDTO?> GetStudentByPersonID(int personID)
+        public async Task<bool> ChangePasswordAsync(
+            int studentId,
+            string passwordHash)
         {
-            return ExecuteCommandAsync("SP_GetStudentByPersonID", cmd => cmd.Parameters.AddWithValue("@PersonID", personID), async cmd =>
-            {
-                using var reader = await cmd.ExecuteReaderAsync();
-                if (await reader.ReadAsync())
+            return await ExecuteCommandAsync(
+                "dbo.SP_ChangeStudentPassword",
+                cmd =>
                 {
+                    cmd.Parameters.Add(
+                        "@StudentID",
+                        SqlDbType.Int).Value =
+                        studentId;
+
+                    cmd.Parameters.Add(
+                        "@NewPassword",
+                        SqlDbType.NVarChar,
+                        255).Value =
+                        passwordHash;
+                },
+                async cmd =>
+                {
+                    object? result =
+                        await cmd.ExecuteScalarAsync();
+
+                    return result != null &&
+                           result != DBNull.Value &&
+                           Convert.ToBoolean(result);
+                });
+        }
+
+        public async Task<bool> DeleteAsync(
+            int id)
+        {
+            return await ExecuteCommandAsync(
+                "SP_DeleteStudent",
+                cmd =>
+                {
+                    cmd.Parameters.Add(
+                        "@StudentID",
+                        SqlDbType.Int).Value =
+                        id;
+                },
+                async cmd =>
+                    await cmd.ExecuteNonQueryAsync() > 0);
+        }
+
+        public async Task<List<clsStudentDTO>>
+            GetAllAsync()
+        {
+            return await ExecuteCommandAsync(
+                "SP_GetAllStudent",
+                cmd => { },
+                async cmd =>
+                {
+                    var studentList =
+                        new List<clsStudentDTO>();
+
+                    using var reader =
+                        await cmd.ExecuteReaderAsync();
+
+                    while (await reader.ReadAsync())
+                    {
+                        studentList.Add(
+                            new clsStudentDTO(
+                                reader.GetInt32(
+                                    reader.GetOrdinal(
+                                        "PersonID")),
+
+                                reader.GetString(
+                                    reader.GetOrdinal(
+                                        "FirstName")),
+
+                                reader.GetString(
+                                    reader.GetOrdinal(
+                                        "LastName")),
+
+                                reader.GetString(
+                                    reader.GetOrdinal(
+                                        "Phone")),
+
+                                reader.GetString(
+                                    reader.GetOrdinal(
+                                        "Email")),
+
+                                reader.GetInt32(
+                                    reader.GetOrdinal(
+                                        "StudentID")),
+
+                                null));
+                    }
+
+                    return studentList;
+                });
+        }
+
+        public async Task<clsStudentDTO?>
+            GetByIdAsync(int id)
+        {
+            return await ExecuteCommandAsync(
+                "SP_GetStudentInfoByID",
+                cmd =>
+                {
+                    cmd.Parameters.Add(
+                        "@StudentID",
+                        SqlDbType.Int).Value =
+                        id;
+                },
+                async cmd =>
+                {
+                    using var reader =
+                        await cmd.ExecuteReaderAsync();
+
+                    if (!await reader.ReadAsync())
+                    {
+                        return null;
+                    }
+
                     return new clsStudentDTO(
-                    reader.GetInt32(reader.GetOrdinal("PersonID")),
-                    reader.GetString(reader.GetOrdinal("FirstName")),
-                    reader.GetString(reader.GetOrdinal("LastName")),
-                    reader.GetString(reader.GetOrdinal("Phone")),
-                    reader.GetString(reader.GetOrdinal("Email")),
-                    reader.GetInt32(reader.GetOrdinal("StudentID")),
-                    null);
-                }
-                else
-                    return null;
-            });
+                        reader.GetInt32(
+                            reader.GetOrdinal(
+                                "PersonID")),
+
+                        reader.GetString(
+                            reader.GetOrdinal(
+                                "FirstName")),
+
+                        reader.GetString(
+                            reader.GetOrdinal(
+                                "LastName")),
+
+                        reader.GetString(
+                            reader.GetOrdinal(
+                                "Phone")),
+
+                        reader.GetString(
+                            reader.GetOrdinal(
+                                "Email")),
+
+                        reader.GetInt32(
+                            reader.GetOrdinal(
+                                "StudentID")),
+
+                        null);
+                });
+        }
+
+        public Task<clsStudentDTO?>
+            GetStudentByEmail(string email)
+        {
+            return ExecuteCommandAsync(
+                "SP_GetStudentByEmail",
+                cmd =>
+                {
+                    cmd.Parameters.Add(
+                        "@Email",
+                        SqlDbType.NVarChar).Value =
+                        email;
+                },
+                async cmd =>
+                {
+                    using var reader =
+                        await cmd.ExecuteReaderAsync();
+
+                    if (!await reader.ReadAsync())
+                    {
+                        return null;
+                    }
+
+                    return new clsStudentDTO(
+                        reader.GetInt32(
+                            reader.GetOrdinal(
+                                "PersonID")),
+
+                        reader.GetString(
+                            reader.GetOrdinal(
+                                "FirstName")),
+
+                        reader.GetString(
+                            reader.GetOrdinal(
+                                "LastName")),
+
+                        reader.GetString(
+                            reader.GetOrdinal(
+                                "Phone")),
+
+                        reader.GetString(
+                            reader.GetOrdinal(
+                                "Email")),
+
+                        reader.GetInt32(
+                            reader.GetOrdinal(
+                                "StudentID")),
+
+                        reader.GetString(
+                            reader.GetOrdinal(
+                                "Password")));
+                });
+        }
+
+        public Task<clsStudentDTO?>
+            GetStudentByPersonID(int personID)
+        {
+            return ExecuteCommandAsync(
+                "SP_GetStudentByPersonID",
+                cmd =>
+                {
+                    cmd.Parameters.Add(
+                        "@PersonID",
+                        SqlDbType.Int).Value =
+                        personID;
+                },
+                async cmd =>
+                {
+                    using var reader =
+                        await cmd.ExecuteReaderAsync();
+
+                    if (!await reader.ReadAsync())
+                    {
+                        return null;
+                    }
+
+                    return new clsStudentDTO(
+                        reader.GetInt32(
+                            reader.GetOrdinal(
+                                "PersonID")),
+
+                        reader.GetString(
+                            reader.GetOrdinal(
+                                "FirstName")),
+
+                        reader.GetString(
+                            reader.GetOrdinal(
+                                "LastName")),
+
+                        reader.GetString(
+                            reader.GetOrdinal(
+                                "Phone")),
+
+                        reader.GetString(
+                            reader.GetOrdinal(
+                                "Email")),
+
+                        reader.GetInt32(
+                            reader.GetOrdinal(
+                                "StudentID")),
+
+                        null);
+                });
+        }
+
+        public async Task<bool> UpdateAsync(
+     clsUpdateStudentDTO updateDTO)
+        {
+            ArgumentNullException.ThrowIfNull(updateDTO);
+
+            return await ExecuteCommandAsync(
+                "dbo.SP_UpdateStudent",
+                cmd =>
+                {
+                    cmd.Parameters.Add(
+                        "@StudentID",
+                        SqlDbType.Int).Value =
+                        updateDTO.StudentID;
+
+                    cmd.Parameters.Add(
+                        "@FirstName",
+                        SqlDbType.NVarChar,
+                        50).Value =
+                        updateDTO.FirstName;
+
+                    cmd.Parameters.Add(
+                        "@LastName",
+                        SqlDbType.NVarChar,
+                        50).Value =
+                        updateDTO.LastName;
+
+                    cmd.Parameters.Add(
+                        "@Phone",
+                        SqlDbType.NVarChar,
+                        10).Value =
+                        updateDTO.Phone;
+
+                    cmd.Parameters.Add(
+                        "@Email",
+                        SqlDbType.NVarChar,
+                        50).Value =
+                        updateDTO.Email;
+
+                    cmd.Parameters.Add(
+                        "@Role",
+                        SqlDbType.NVarChar,
+                        50).Value =
+                        "Student";
+                },
+                async cmd =>
+                {
+                    object? result =
+                        await cmd.ExecuteScalarAsync();
+
+                    return result != null &&
+                           result != DBNull.Value &&
+                           Convert.ToBoolean(result);
+                });
         }
     }
 }

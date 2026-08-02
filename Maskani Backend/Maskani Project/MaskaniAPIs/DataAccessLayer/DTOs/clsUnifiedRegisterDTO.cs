@@ -23,7 +23,9 @@ namespace MaskaniDataAccess.DTOs
         public string Password { get; set; } = string.Empty;
 
         [Required(ErrorMessage = "Role is required.")]
-        [RegularExpression("^(User|Student|Owner)$", ErrorMessage = "Role must be either 'User', 'Student', or 'Owner'.")]
+        [RegularExpression(
+            "^(?i:Student|Owner)$",
+            ErrorMessage = "Role must be either 'Student' or 'Owner'.")]
         public string Role { get; set; } = string.Empty;
     }
 }

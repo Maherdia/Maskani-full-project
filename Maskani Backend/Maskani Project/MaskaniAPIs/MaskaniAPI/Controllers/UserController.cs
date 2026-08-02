@@ -1,116 +1,270 @@
-﻿using Microsoft.AspNetCore.Mvc;
-using MaskaniBusinessLayer;
+﻿using MaskaniBusinessLayer;
 using MaskaniDataAccess.DTOs;
 using MaskaniDataAccessLayer.DTOs;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 
 namespace MaskaniAPI.Controllers
 {
     [ApiController]
     [Route("api/users")]
+    [Authorize(Roles = "User")]
     public class UserController : ControllerBase
     {
         private readonly UserService _userService;
+        private readonly CurrentUserService
+            _currentUserService;
 
-        public UserController(UserService userService)
+        public UserController(
+            UserService userService,
+            CurrentUserService currentUserService)
         {
             _userService = userService;
+            _currentUserService = currentUserService;
         }
 
-        [HttpPost]
-        [ProducesResponseType(typeof(object), StatusCodes.Status201Created)]
-        [ProducesResponseType(StatusCodes.Status400BadRequest)]
-        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-        public async Task<IActionResult> Add([FromBody] clsAddUserDTO dto)
-        {
-            if (dto == null)
-                return BadRequest(new { message = "Invalid user data." });
+        // ========================================================
+        // CURRENT ADMIN PROFILE
+        // ========================================================
 
-            try
-            {
-                var id = await _userService.AddUserAsync(dto);
-                return CreatedAtAction(nameof(GetById), new { id }, new { userId = id });
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, new { message = "Failed to add user.", error = ex.Message });
-            }
-        }
-
-        [HttpPut("{id}")]
-        [ProducesResponseType(StatusCodes.Status200OK)]
+        [HttpGet("me")]
+        [ProducesResponseType(
+            typeof(clsUserDTO),
+            StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
-        public async Task<IActionResult> Update(int id, [FromBody] clsUpdateUserDTO dto)
+        public async Task<ActionResult<clsUserDTO>> GetMe()
         {
-            dto.UserID = id;
-            var success = await _userService.UpdateUserAsync(dto);
-            return success ? Ok() : NotFound();
+            int personId =
+                _currentUserService.PersonId;
+
+            var user =
+                await _userService
+                    .GetUserByPersonID(personId);
+
+            if (user == null)
+            {
+                return NotFound(new ProblemDetails
+                {
+                    Title = "User account not found.",
+                    Status = StatusCodes.Status404NotFound
+                });
+            }
+
+            RemovePassword(user);
+
+            return Ok(user);
         }
 
-        [HttpDelete("{id}")]
+        // ========================================================
+        // ADMIN MANAGEMENT
+        // ========================================================
+
+        [HttpPut("{id:int}")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> Update(
+            int id,
+            [FromBody] clsUpdateUserDTO dto)
+        {
+            if (id <= 0)
+            {
+                return NotFound(new ProblemDetails
+                {
+                    Title = "User not found.",
+                    Status = StatusCodes.Status404NotFound
+                });
+            }
+
+            var targetUser =
+                await _userService.GetUserByIdAsync(id);
+
+            if (targetUser == null)
+            {
+                return NotFound(new ProblemDetails
+                {
+                    Title = "User not found.",
+                    Status = StatusCodes.Status404NotFound
+                });
+            }
+
+            // Bind the update to the database record selected
+            // by the route. Ignore identity values from the body.
+            dto.UserID = targetUser.UserID;
+            dto.PersonID = targetUser.PersonID;
+            dto.Role = "User";
+
+            bool success =
+                await _userService.UpdateUserAsync(dto);
+
+            if (!success)
+            {
+                return NotFound(new ProblemDetails
+                {
+                    Title = "User not found.",
+                    Status = StatusCodes.Status404NotFound
+                });
+            }
+
+            return Ok();
+        }
+
+        [HttpDelete("{id:int}")]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> Delete(int id)
         {
-            var success = await _userService.DeleteUserAsync(id);
-            return success ? Ok() : NotFound();
+            if (id <= 0)
+            {
+                return NotFound(new ProblemDetails
+                {
+                    Title = "User not found.",
+                    Status = StatusCodes.Status404NotFound
+                });
+            }
+
+            bool success =
+                await _userService.DeleteUserAsync(id);
+
+            if (!success)
+            {
+                return NotFound(new ProblemDetails
+                {
+                    Title = "User not found.",
+                    Status = StatusCodes.Status404NotFound
+                });
+            }
+
+            return Ok();
         }
 
         [HttpGet]
-        [ProducesResponseType(typeof(IEnumerable<clsUserDTO>), StatusCodes.Status200OK)]
-        public async Task<ActionResult<IEnumerable<clsUserDTO>>> GetAll()
+        [ProducesResponseType(
+            typeof(IEnumerable<clsUserDTO>),
+            StatusCodes.Status200OK)]
+        public async Task<ActionResult<IEnumerable<clsUserDTO>>>
+            GetAll()
         {
-            var users = await _userService.GetAllUsersAsync();
+            var users =
+                await _userService.GetAllUsersAsync();
+
+            foreach (var user in users)
+            {
+                RemovePassword(user);
+            }
+
             return Ok(users);
         }
 
-        [HttpGet("{id}")]
-        [ProducesResponseType(typeof(clsUserDTO), StatusCodes.Status200OK)]
+        [HttpGet("{id:int}")]
+        [ProducesResponseType(
+            typeof(clsUserDTO),
+            StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
-        public async Task<ActionResult<clsUserDTO>> GetById(int id)
+        public async Task<ActionResult<clsUserDTO>>
+            GetById(int id)
         {
-            var user = await _userService.GetUserByIdAsync(id);
-            return user is not null ? Ok(user) : NotFound();
+            if (id <= 0)
+            {
+                return NotFound(new ProblemDetails
+                {
+                    Title = "User not found.",
+                    Status = StatusCodes.Status404NotFound
+                });
+            }
+
+            var user =
+                await _userService.GetUserByIdAsync(id);
+
+            if (user == null)
+            {
+                return NotFound(new ProblemDetails
+                {
+                    Title = "User not found.",
+                    Status = StatusCodes.Status404NotFound
+                });
+            }
+
+            RemovePassword(user);
+
+            return Ok(user);
         }
 
+        [HttpGet("person/{personId:int}")]
+        [ProducesResponseType(
+            typeof(clsUserDTO),
+            StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<ActionResult<clsUserDTO>>
+            GetUserByPersonID(int personId)
+        {
+            if (personId <= 0)
+            {
+                return NotFound(new ProblemDetails
+                {
+                    Title = "User not found.",
+                    Status = StatusCodes.Status404NotFound
+                });
+            }
 
-        [HttpPost("change-password")]
-        [ProducesResponseType(StatusCodes.Status200OK)]
+            var user =
+                await _userService
+                    .GetUserByPersonID(personId);
+
+            if (user == null)
+            {
+                return NotFound(new ProblemDetails
+                {
+                    Title = "User not found.",
+                    Status = StatusCodes.Status404NotFound
+                });
+            }
+
+            RemovePassword(user);
+
+            return Ok(user);
+        }
+
+        [HttpGet("by-email")]
+        [ProducesResponseType(
+            typeof(clsUserDTO),
+            StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
-        public async Task<IActionResult> ChangePassword([FromQuery] int userId, [FromBody] string newPassword)
-        {
-            if (string.IsNullOrWhiteSpace(newPassword))
-                return BadRequest("Password cannot be empty.");
-
-            var success = await _userService.ChangePasswordAsync(userId, newPassword);
-            return success ? Ok() : BadRequest("Password change failed.");
-        }
-
-        [HttpPost("login")]
-        [ProducesResponseType(typeof(clsUserDTO), StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-        public async Task<IActionResult> Login([FromBody] clsUserDTO loginRequest)
-        {
-            var result = await _userService.LoginAsync(loginRequest.Email, loginRequest.Password);
-            return result is not null ? Ok(result) : Unauthorized();
-        }
-
-        [HttpGet("Person/{PersonID}")]
-        [ProducesResponseType(typeof(clsUserDTO), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
-        public async Task<ActionResult<clsUserDTO>> GetUserByPersonID(int PersonID)
+        public async Task<ActionResult<clsUserDTO>>
+            GetUserByEmail([FromQuery] string email)
         {
-            var user = await _userService.GetUserByPersonID(PersonID);
-            return user is not null ? Ok(user) : NotFound();
+            if (string.IsNullOrWhiteSpace(email))
+            {
+                return BadRequest(new ProblemDetails
+                {
+                    Title = "Email is required.",
+                    Status = StatusCodes.Status400BadRequest
+                });
+            }
+
+            var user =
+                await _userService
+                    .GetUserByEmailAsync(email.Trim());
+
+            if (user == null)
+            {
+                return NotFound(new ProblemDetails
+                {
+                    Title = "User not found.",
+                    Status = StatusCodes.Status404NotFound
+                });
+            }
+
+            RemovePassword(user);
+
+            return Ok(user);
         }
 
-
-        [HttpGet("email/{email}")]
-        [ProducesResponseType(typeof(clsUserDTO), StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status404NotFound)]
-        public async Task<ActionResult<clsUserDTO>> GetUserByEmail(string email)
+        private static void RemovePassword(
+            clsUserDTO user)
         {
-            var user = await _userService.GetUserByEmailAsync(email);
-            return user is not null ? Ok(user) : NotFound();
+            user.Password = null;
         }
     }
 }

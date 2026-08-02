@@ -1,57 +1,77 @@
-﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
-using System.Data;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.ComponentModel.DataAnnotations;
 using MaskaniDataAccessLayer.DTOs;
 
 namespace MaskaniDataAccess.DTOs
 {
-    public class clsStudentDTO :clsPeopleDTO
+    public class clsStudentDTO : clsPeopleDTO
     {
-        public int StudentID { set; get; }
-        [Required(ErrorMessage = "Password is required.")]
-        [MinLength(6, ErrorMessage = "Password must be at least 6 characters.")]
-        public string Password { set; get; }
-        public clsStudentDTO(int PersonID, string FirstName, string LastName, string Phone, string Email, int StudentID, string Password)
-            : base(PersonID, FirstName, LastName, Phone, Email, "Student")
+        public int StudentID { get; set; }
+
+        public string? Password { get; set; }
+
+        public clsStudentDTO(
+            int personID,
+            string firstName,
+            string lastName,
+            string phone,
+            string email,
+            int studentID,
+            string password)
+            : base(
+                personID,
+                firstName,
+                lastName,
+                phone,
+                email,
+                "Student")
         {
-            this.StudentID = StudentID;
-            this.Password = Password;
+            StudentID = studentID;
+            Password = password;
         }
+
         public clsStudentDTO() : base()
         {
             Role = "Student";
-            this.StudentID = -1;
-            this.Password = string.Empty;
+            StudentID = -1;
+            Password = null;
         }
     }
 
     public class clsAddStudentDTO : clsAddPeopleDTO
     {
         [Required(ErrorMessage = "Password is required.")]
-        [MinLength(6, ErrorMessage = "Password must be at least 6 characters.")]
-        public string Password { set; get; }
-        public clsAddStudentDTO(string FirstName, string LastName, string Phone, string Email, string Password)
-            : base(FirstName, LastName, Phone, Email, "Student")
+        [MinLength(
+            6,
+            ErrorMessage =
+                "Password must be at least 6 characters.")]
+        public string Password { get; set; } =
+            string.Empty;
+
+        public clsAddStudentDTO(
+            string firstName,
+            string lastName,
+            string phone,
+            string email,
+            string password)
+            : base(
+                firstName,
+                lastName,
+                phone,
+                email,
+                "Student")
         {
-            this.Password = Password;
+            Password = password;
         }
+
         public clsAddStudentDTO() : base()
         {
-            Password = string.Empty;
             Role = "Student";
         }
     }
 
-    public class clsUpdateStudentDTO : clsUpdatePeopleDTO
+    public class clsUpdateStudentDTO :
+        clsUpdatePeopleDTO
     {
-        [Required(ErrorMessage = "Password is required.")]
-        [MinLength(6, ErrorMessage = "Password must be at least 6 characters.")]
-        public string Password { get; set; }
-
         public int StudentID { get; set; }
 
         public clsUpdateStudentDTO(
@@ -60,20 +80,22 @@ namespace MaskaniDataAccess.DTOs
             string firstName,
             string lastName,
             string phone,
-            string email,
-            string password)
-            : base(personID, firstName, lastName, phone, email, "Student")
+            string email)
+            : base(
+                personID,
+                firstName,
+                lastName,
+                phone,
+                email,
+                "Student")
         {
-            this.StudentID = studentID;
-            this.Password = password;
+            StudentID = studentID;
         }
 
         public clsUpdateStudentDTO() : base()
         {
             StudentID = -1;
-            Password = string.Empty;
-            Role = "Student"; // still part of base class
+            Role = "Student";
         }
     }
-
 }

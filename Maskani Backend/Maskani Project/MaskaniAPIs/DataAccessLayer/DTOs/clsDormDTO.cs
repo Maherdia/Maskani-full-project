@@ -1,82 +1,127 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace Repositry_DataAccess_.DTOs
+﻿namespace Repositry_DataAccess_.DTOs
 {
     public class clsDormDTO
     {
-        public string DormID { set; get; }
-        public string DormName { set; get; }
-        public string Address { set; get; }
-        public bool FurnishedOrNot { set; get; }
-        public double Distance { set; get; }
-        public string UniversityName { set; get; }
-        public string OwnerName { set; get; }
-        public string Phone { set; get; }
-        public string Email { set; get; }
-        public clsDormDTO(string dormID, string dormName, string address, bool furnishedOrNot, double distance, string universityName, string ownerName, string phone)
-        {
-            DormID = dormID;
-            DormName = dormName;
-            Address = address;
-            FurnishedOrNot = furnishedOrNot;
-            Distance = distance;
-            UniversityName = universityName;
-            OwnerName = ownerName;
-            Phone = phone;
-        }
+        public string DormID { get; set; } = string.Empty;
+        public int OwnerID { get; set; }
+        public string DormName { get; set; } = string.Empty;
+        public string Address { get; set; } = string.Empty;
+        public bool FurnishedOrNot { get; set; }
+        public double Distance { get; set; }
+        public string UniversityName { get; set; } = string.Empty;
+        public string OwnerName { get; set; } = string.Empty;
+        public string Phone { get; set; } = string.Empty;
+        public string Email { get; set; } = string.Empty;
+        public double? Latitude { get; set; }
+        public double? Longitude { get; set; }
+        public string DormStatus { get; set; } = "Approved";
 
-        public clsDormDTO(string dormID, string dormName, string address, bool furnishedOrNot, double distance, string universityName, string ownerName, string phone,string Email)
-        {
-            DormID = dormID;
-            DormName = dormName;
-            Address = address;
-            FurnishedOrNot = furnishedOrNot;
-            Distance = distance;
-            UniversityName = universityName;
-            OwnerName = ownerName;
-            Phone = phone;
-            this.Email = Email;
-        }
         public clsDormDTO()
         {
+        }
 
+        public clsDormDTO(
+            string dormID,
+            string dormName,
+            string address,
+            bool furnishedOrNot,
+            double distance,
+            string universityName,
+            string ownerName,
+            string phone)
+        {
+            DormID = dormID;
+            DormName = dormName;
+            Address = address;
+            FurnishedOrNot = furnishedOrNot;
+            Distance = distance;
+            UniversityName = universityName;
+            OwnerName = ownerName;
+            Phone = phone;
+        }
+
+        public clsDormDTO(
+            string dormID,
+            string dormName,
+            string address,
+            bool furnishedOrNot,
+            double distance,
+            string universityName,
+            string ownerName,
+            string phone,
+            string email)
+        {
+            DormID = dormID;
+            DormName = dormName;
+            Address = address;
+            FurnishedOrNot = furnishedOrNot;
+            Distance = distance;
+            UniversityName = universityName;
+            OwnerName = ownerName;
+            Phone = phone;
+            Email = email;
         }
     }
+
     public class clsAddDormDTO
     {
-        public string DormID { set; get; }
-        public int OwnerID { set; get; }
-        public int UniversityID { set; get; }
-        public string DormName { set; get; }
-        public string Address { set; get; }
-        public bool FurnishedOrNot { set; get; }
-        public double Distance { set; get; }
-        public clsAddDormDTO(string DormID, string DormName, string Address, bool FurnishedOrNot, int UniversityID, double Distance, int OwnerID)
+        public string DormID { get; set; } = string.Empty;
+        public int OwnerID { get; set; }
+        public int UniversityID { get; set; }
+        public string DormName { get; set; } = string.Empty;
+        public string Address { get; set; } = string.Empty;
+        public bool FurnishedOrNot { get; set; }
+        public double Distance { get; set; }
+        public double? Latitude { get; set; }
+        public double? Longitude { get; set; }
+
+        public clsAddDormDTO()
         {
-            this.DormID = DormID;
-            this.DormName = DormName;
-            this.Address = Address;
-            this.FurnishedOrNot = FurnishedOrNot;
-            this.UniversityID = UniversityID;
-            this.Distance = Distance;
-            this.OwnerID = OwnerID;
+        }
+
+        public clsAddDormDTO(
+            string dormID,
+            string dormName,
+            string address,
+            bool furnishedOrNot,
+            int universityID,
+            double distance,
+            int ownerID)
+        {
+            DormID = dormID;
+            DormName = dormName;
+            Address = address;
+            FurnishedOrNot = furnishedOrNot;
+            UniversityID = universityID;
+            Distance = distance;
+            OwnerID = ownerID;
         }
     }
+
     public class clsUpdateDormDTO
     {
-        public string DormID { get; set; }
-        public string DormName { get; set; }
-        public string Address { get; set; }
+        public string DormID { get; set; } = string.Empty;
+        public string DormName { get; set; } = string.Empty;
+        public string Address { get; set; } = string.Empty;
         public bool FurnishedOrNot { get; set; }
         public double Distance { get; set; }
         public int UniversityID { get; set; }
         public int OwnerID { get; set; }
+        public double? Latitude { get; set; }
+        public double? Longitude { get; set; }
 
-        public clsUpdateDormDTO(string dormID, string dormName, string address, bool furnishedOrNot, double distance, int universityID, int ownerID)
+        public clsUpdateDormDTO()
+        {
+        }
+
+        public clsUpdateDormDTO(
+            string dormID,
+            string dormName,
+            string address,
+            bool furnishedOrNot,
+            double distance,
+            int universityID,
+            int ownerID)
         {
             DormID = dormID;
             DormName = dormName;
@@ -88,4 +133,9 @@ namespace Repositry_DataAccess_.DTOs
         }
     }
 
+    public class clsDormStatusDTO
+    {
+        public string DormID { get; set; } = string.Empty;
+        public string DormStatus { get; set; } = string.Empty;
+    }
 }

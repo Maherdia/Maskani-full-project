@@ -1,174 +1,534 @@
-﻿using Microsoft.AspNetCore.Mvc;
-using DataAccessLayer.DTOs;
+﻿using DataAccessLayer.DTOs;
 using MaskaniBusinessLayer;
-using Repositry_DataAccess_.DTOs;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 
 namespace MaskaniAPI.Controllers
 {
     [ApiController]
     [Route("api/Booking")]
+    [Authorize]
     public class BookingsController : ControllerBase
     {
         private readonly BookingService _bookingService;
+        private readonly StudentService _studentService;
+        private readonly OwnerService _ownerService;
+        private readonly CurrentUserService _currentUserService;
 
-        public BookingsController(BookingService bookingService)
+        public BookingsController(
+            BookingService bookingService,
+            StudentService studentService,
+            OwnerService ownerService,
+            CurrentUserService currentUserService)
         {
             _bookingService = bookingService;
+            _studentService = studentService;
+            _ownerService = ownerService;
+            _currentUserService = currentUserService;
         }
 
-        [ProducesResponseType(typeof(IEnumerable<clsBookingDTO>), StatusCodes.Status200OK)]
+        // ========================================================
+        // ADMIN ONLY
+        // ========================================================
+
+        [Authorize(Roles = "User")]
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<clsBookingDTO>>> GetAllBookings()
+        [ProducesResponseType(
+            typeof(IEnumerable<clsBookingDTO>),
+            StatusCodes.Status200OK)]
+        public async Task<ActionResult<IEnumerable<clsBookingDTO>>>
+            GetAllBookings()
         {
-            var bookings = await _bookingService.GetAllBookingsAsync();
+            var bookings =
+                await _bookingService.GetAllBookingsAsync();
+
             return Ok(bookings);
         }
 
-        [HttpGet("{id}")]
-        [ProducesResponseType(typeof(clsBookingDTO), StatusCodes.Status200OK)]
+        [Authorize(Roles = "User")]
+        [HttpGet("{id:int}")]
+        [ProducesResponseType(
+            typeof(clsBookingDTO),
+            StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
-        public async Task<ActionResult<clsBookingDTO>> GetBookingById(int id)
+        public async Task<ActionResult<clsBookingDTO>>
+            GetBookingById(int id)
         {
-            var booking = await _bookingService.GetBookingByIdAsync(id);
-            return booking != null ? Ok(booking) : NotFound();
+            var booking =
+                await _bookingService.GetBookingByIdAsync(id);
+
+            if (booking == null)
+            {
+                return NotFound(new ProblemDetails
+                {
+                    Title = "Booking not found.",
+                    Status = StatusCodes.Status404NotFound
+                });
+            }
+
+            return Ok(booking);
         }
 
+        // ========================================================
+        // STUDENT CREATES A BOOKING
+        // StudentID always comes from the authenticated JWT account.
+        // ========================================================
+
+        [Authorize(Roles = "Student")]
         [HttpPost]
-        [ProducesResponseType(typeof(int), StatusCodes.Status201Created)]
+        [ProducesResponseType(
+            typeof(int),
+            StatusCodes.Status201Created)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
-        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(StatusCodes.Status409Conflict)]
-        public async Task<ActionResult<int>> AddBooking([FromBody] clsAddBookingDTO dto)
+        public async Task<ActionResult<int>> AddBooking(
+            [FromBody] clsAddBookingDTO dto)
         {
-            if (!ModelState.IsValid)
-                return BadRequest(ModelState);
-            try
+            int personId = _currentUserService.PersonId;
+
+            var student =
+                await _studentService.GetStudentByPersonIDAsync(
+                    personId);
+
+            if (student == null)
             {
-                var newId = await _bookingService.AddBookingAsync(dto);
-                return CreatedAtAction(nameof(GetBookingById), new { id = newId }, newId);
+                return Unauthorized(new ProblemDetails
+                {
+                    Title = "Student account not found.",
+                    Status = StatusCodes.Status401Unauthorized
+                });
             }
-            catch (InvalidOperationException ex)
-            {
-                return Conflict(new { message = ex.Message });
-            }
-            catch (Exception)
-            {
-                return StatusCode(500, new { message = "Failed to add booking." });
-            }
+
+            // Never trust StudentID submitted by the client.
+            dto.StudentID = student.StudentID;
+
+            int newId =
+                await _bookingService.AddBookingAsync(dto);
+
+            return CreatedAtAction(
+                nameof(GetBookingById),
+                new { id = newId },
+                newId);
         }
 
+        // ========================================================
+        // ADMIN UPDATES A BOOKING
+        // ========================================================
 
+        [Authorize(Roles = "User")]
         [HttpPut]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
-        public async Task<IActionResult> UpdateBooking([FromBody] clsUpdateBookingDTO dto)
+        [ProducesResponseType(StatusCodes.Status409Conflict)]
+        public async Task<IActionResult> UpdateBooking(
+            [FromBody] clsUpdateBookingDTO dto)
         {
-            var success = await _bookingService.UpdateBookingAsync(dto);
-            return success ? Ok() : NotFound();
+            bool success =
+                await _bookingService.UpdateBookingAsync(dto);
+
+            if (!success)
+            {
+                return NotFound(new ProblemDetails
+                {
+                    Title = "Booking not found.",
+                    Status = StatusCodes.Status404NotFound
+                });
+            }
+
+            return Ok();
         }
 
-        [HttpDelete("{id}")]
+        // ========================================================
+        // STUDENT DELETES OWN BOOKING / ADMIN DELETES ANY BOOKING
+        // ========================================================
+
+        [Authorize(Roles = "Student,User")]
+        [HttpDelete("{id:int}")]
         [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> DeleteBooking(int id)
         {
-            var success = await _bookingService.DeleteBookingAsync(id);
-            return success ? Ok() : NotFound();
+            if (_currentUserService.IsInRole("User"))
+            {
+                bool adminDeleted =
+                    await _bookingService
+                        .DeleteBookingAsAdminAsync(id);
+
+                if (!adminDeleted)
+                {
+                    return NotFound(new ProblemDetails
+                    {
+                        Title = "Booking not found.",
+                        Status = StatusCodes.Status404NotFound
+                    });
+                }
+
+                return Ok();
+            }
+
+            int personId = _currentUserService.PersonId;
+
+            var student =
+                await _studentService.GetStudentByPersonIDAsync(
+                    personId);
+
+            if (student == null)
+            {
+                return Unauthorized(new ProblemDetails
+                {
+                    Title = "Student account not found.",
+                    Status = StatusCodes.Status401Unauthorized
+                });
+            }
+
+            bool deleted =
+                await _bookingService.DeleteBookingAsync(
+                    id,
+                    student.StudentID);
+
+            if (!deleted)
+            {
+                return NotFound(new ProblemDetails
+                {
+                    Title =
+                        "Booking not found or does not belong to you.",
+                    Status = StatusCodes.Status404NotFound
+                });
+            }
+
+            return Ok();
         }
 
-        [HttpGet("owner/{ownerId}")]
-        [ProducesResponseType(typeof(IEnumerable<clsBookingDTO>), StatusCodes.Status200OK)]
-        public async Task<ActionResult<IEnumerable<clsBookingDTO>>> GetBookingsByOwnerId(int ownerId)
+        // ========================================================
+        // OWNER BOOKINGS
+        // Admin may request any OwnerID.
+        // OwnerID from an Owner request is ignored; JWT decides identity.
+        // ========================================================
+
+        [Authorize(Roles = "Owner,User")]
+        [HttpGet("owner/{ownerId:int}")]
+        [ProducesResponseType(
+            typeof(IEnumerable<clsBookingDTO>),
+            StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        public async Task<ActionResult<IEnumerable<clsBookingDTO>>>
+            GetBookingsByOwnerId(int ownerId)
         {
-            var bookings = await _bookingService.GetBookingsByOwnerIdAsync(ownerId);
+            if (_currentUserService.IsInRole("User"))
+            {
+                var adminBookings =
+                    await _bookingService
+                        .GetBookingsByOwnerIdAsync(ownerId);
+
+                return Ok(adminBookings);
+            }
+
+            int personId = _currentUserService.PersonId;
+
+            var owner =
+                await _ownerService.GetOwnerByPersonID(
+                    personId);
+
+            if (owner == null)
+            {
+                return Unauthorized(new ProblemDetails
+                {
+                    Title = "Owner account not found.",
+                    Status = StatusCodes.Status401Unauthorized
+                });
+            }
+
+            // Ignore the route OwnerID for authenticated owners.
+            // An owner can only retrieve their own bookings.
+            var ownerBookings =
+                await _bookingService
+                    .GetBookingsByOwnerIdAsync(owner.OwnerID);
+
+            return Ok(ownerBookings);
+        }
+
+        // ========================================================
+        // STUDENT GETS OWN BOOKINGS
+        // ========================================================
+
+        [Authorize(Roles = "Student")]
+        [HttpGet("student")]
+        [ProducesResponseType(
+            typeof(IEnumerable<clsBookingDTO>),
+            StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        public async Task<ActionResult<IEnumerable<clsBookingDTO>>>
+            GetMyBookings()
+        {
+            int personId = _currentUserService.PersonId;
+
+            var student =
+                await _studentService.GetStudentByPersonIDAsync(
+                    personId);
+
+            if (student == null)
+            {
+                return Unauthorized(new ProblemDetails
+                {
+                    Title = "Student account not found.",
+                    Status = StatusCodes.Status401Unauthorized
+                });
+            }
+
+            var bookings =
+                await _bookingService
+                    .GetBookingsByStudentIdAsync(
+                        student.StudentID);
+
             return Ok(bookings);
         }
 
-        [HttpGet("student/{studentId}")]
-        [ProducesResponseType(typeof(IEnumerable<clsBookingDTO>), StatusCodes.Status200OK)]
-        public async Task<ActionResult<IEnumerable<clsBookingDTO>>> GetBookingsByStudentId(int studentId)
-        {
-            var bookings = await _bookingService.GetBookingsByStudentIdAsync(studentId);
-            return Ok(bookings);
-        }
+        // ========================================================
+        // ADMIN QUERY ENDPOINTS
+        // ========================================================
 
+        [Authorize(Roles = "User")]
         [HttpGet("status/{status}")]
-        [ProducesResponseType(typeof(IEnumerable<clsBookingDTO>), StatusCodes.Status200OK)]
-        public async Task<ActionResult<IEnumerable<clsBookingDTO>>> GetBookingsByStatus(string status)
+        [ProducesResponseType(
+            typeof(IEnumerable<clsBookingDTO>),
+            StatusCodes.Status200OK)]
+        public async Task<ActionResult<IEnumerable<clsBookingDTO>>>
+            GetBookingsByStatus(string status)
         {
-            var bookings = await _bookingService.GetBookingsByStatusAsync(status);
+            var bookings =
+                await _bookingService
+                    .GetBookingsByStatusAsync(status);
+
             return Ok(bookings);
         }
 
+        [Authorize(Roles = "User")]
         [HttpGet("exists")]
-        [ProducesResponseType(typeof(bool), StatusCodes.Status200OK)]
-        public async Task<ActionResult<bool>> BookingExists([FromQuery] int studentId, [FromQuery] int roomId, [FromQuery] int bookID)
+        [ProducesResponseType(
+            typeof(bool),
+            StatusCodes.Status200OK)]
+        public async Task<ActionResult<bool>> BookingExists(
+            [FromQuery] int studentId,
+            [FromQuery] int roomId,
+            [FromQuery] int bookID)
         {
-            var exists = await _bookingService.BookingExistsAsync(studentId, roomId, roomId);
+            bool exists =
+                await _bookingService.BookingExistsAsync(
+                    studentId,
+                    roomId,
+                    bookID);
+
             return Ok(exists);
         }
 
+        [Authorize(Roles = "User")]
         [HttpGet("count")]
-        [ProducesResponseType(typeof(int), StatusCodes.Status200OK)]
+        [ProducesResponseType(
+            typeof(int),
+            StatusCodes.Status200OK)]
         public async Task<ActionResult<int>> GetBookingCount()
         {
-            var count = await _bookingService.GetBookingCountAsync();
+            int count =
+                await _bookingService.GetBookingCountAsync();
+
             return Ok(count);
         }
 
-        [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [Authorize(Roles = "User")]
         [HttpGet("duplicate")]
-        public async Task<ActionResult<bool>> IsDuplicateBookingAsync(int StudentID, int RoomID, int BookID)
+        [ProducesResponseType(
+            typeof(bool),
+            StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        public async Task<ActionResult<bool>>
+            IsDuplicateBookingAsync(
+                int StudentID,
+                int RoomID,
+                int BookID)
         {
-            if (StudentID <= 0 || RoomID <= 0 || BookID <= 0) { return BadRequest("Invalid parameters provided."); }
+            if (StudentID <= 0 ||
+                RoomID <= 0 ||
+                BookID <= 0)
+            {
+                return BadRequest(new ProblemDetails
+                {
+                    Title = "Invalid parameters provided.",
+                    Status = StatusCodes.Status400BadRequest
+                });
+            }
 
-            var isDuplicate = await _bookingService.IsDuplicateBookingAsync(StudentID, RoomID, BookID);
+            bool isDuplicate =
+                await _bookingService
+                    .IsDuplicateBookingAsync(
+                        StudentID,
+                        RoomID,
+                        BookID);
+
             return Ok(isDuplicate);
         }
 
-        [HttpPut("{id}/cancel")]
-        [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status400BadRequest)]
-        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-        public async Task<IActionResult> CancelBookingAsync(int id)
-        {
-            try
-            {
-                var result = await _bookingService.CancelBookingAsync(id);
+        // ========================================================
+        // CANCEL BOOKING
+        // Admin: any booking
+        // Owner: only booking belonging to owner's dorm
+        // Student: only student's own booking
+        // ========================================================
 
-                if (result == null)
-                {
-                    return BadRequest(new { message = "Booking not found or already cancelled." });
-                }
-                return Ok(result);
-            }
-            catch (Exception ex)
+        [Authorize(Roles = "Student,Owner,User")]
+        [HttpPut("{id:int}/cancel")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status409Conflict)]
+        public async Task<IActionResult> CancelBookingAsync(
+            int id)
+        {
+            if (_currentUserService.IsInRole("User"))
             {
-                return StatusCode(500, new { message = "Failed to cancel booking" });
+                var adminResult =
+                    await _bookingService
+                        .CancelBookingAsAdminAsync(id);
+
+                if (adminResult == null)
+                {
+                    return NotFound(new ProblemDetails
+                    {
+                        Title = "Booking not found.",
+                        Status = StatusCodes.Status404NotFound
+                    });
+                }
+
+                return Ok(adminResult);
             }
+
+            int personId = _currentUserService.PersonId;
+
+            clsUpdateBookingDTO? result;
+
+            if (_currentUserService.IsInRole("Owner"))
+            {
+                var owner =
+                    await _ownerService.GetOwnerByPersonID(
+                        personId);
+
+                if (owner == null)
+                {
+                    return Unauthorized(new ProblemDetails
+                    {
+                        Title = "Owner account not found.",
+                        Status =
+                            StatusCodes.Status401Unauthorized
+                    });
+                }
+
+                result =
+                    await _bookingService
+                        .CancelBookingByOwnerAsync(
+                            id,
+                            owner.OwnerID);
+            }
+            else
+            {
+                var student =
+                    await _studentService
+                        .GetStudentByPersonIDAsync(
+                            personId);
+
+                if (student == null)
+                {
+                    return Unauthorized(new ProblemDetails
+                    {
+                        Title = "Student account not found.",
+                        Status =
+                            StatusCodes.Status401Unauthorized
+                    });
+                }
+
+                result =
+                    await _bookingService.CancelBookingAsync(
+                        id,
+                        student.StudentID);
+            }
+
+            if (result == null)
+            {
+                return NotFound(new ProblemDetails
+                {
+                    Title =
+                        "Booking not found or you do not own it.",
+                    Status = StatusCodes.Status404NotFound
+                });
+            }
+
+            return Ok(result);
         }
 
-        [HttpPut("{id}/confirm")]
-        [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status400BadRequest)]
-        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-        public async Task<IActionResult> ConfirmBookingAsync(int id)
-        {
-            try
-            {
-                var result = await _bookingService.ConfirmedBookingAsync(id);
-                if (result == null)
-                {
-                    return BadRequest(new { message = "Booking not found or already confirmed." });
-                }
-                return Ok(result);
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, new { message = "Failed to confirm booking" });
-            }
-        }
+        // ========================================================
+        // CONFIRM BOOKING
+        // Admin: any booking
+        // Owner: only booking belonging to owner's dorm
+        // ========================================================
 
+        [Authorize(Roles = "Owner,User")]
+        [HttpPut("{id:int}/confirm")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status409Conflict)]
+        public async Task<IActionResult> ConfirmBookingAsync(
+            int id)
+        {
+            if (_currentUserService.IsInRole("User"))
+            {
+                var adminResult =
+                    await _bookingService
+                        .ConfirmBookingAsAdminAsync(id);
+
+                if (adminResult == null)
+                {
+                    return NotFound(new ProblemDetails
+                    {
+                        Title = "Booking not found.",
+                        Status = StatusCodes.Status404NotFound
+                    });
+                }
+
+                return Ok(adminResult);
+            }
+
+            int personId = _currentUserService.PersonId;
+
+            var owner =
+                await _ownerService.GetOwnerByPersonID(
+                    personId);
+
+            if (owner == null)
+            {
+                return Unauthorized(new ProblemDetails
+                {
+                    Title = "Owner account not found.",
+                    Status = StatusCodes.Status401Unauthorized
+                });
+            }
+
+            var result =
+                await _bookingService.ConfirmedBookingAsync(
+                    id,
+                    owner.OwnerID);
+
+            if (result == null)
+            {
+                return NotFound(new ProblemDetails
+                {
+                    Title =
+                        "Booking not found or it does not belong to your dorm.",
+                    Status = StatusCodes.Status404NotFound
+                });
+            }
+
+            return Ok(result);
+        }
     }
 }

@@ -1,10 +1,6 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Net;
 using System.Net.Mail;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Business_Layer
 {
@@ -12,19 +8,32 @@ namespace Business_Layer
     {
         public static void SendVerificationEmail(string toEmail, string token)
         {
-            string verficationUrl = $"http://Maskani.com/verfiy-email?token={token}";
-            MailMessage mail = new MailMessage();
+            string verificationUrl = $"http://Maskani.com/verify-email?token={token}";
+
+            using var mail = new MailMessage();
             mail.From = new MailAddress("your-email@example.com");
             mail.To.Add(toEmail);
             mail.Subject = "Verify your email";
-            mail.Body = $"Click the following link to verify your email: <a href='{verficationUrl}'>Verify Email</a>";
+            mail.Body = $"Click the following link to verify your email: <a href='{verificationUrl}'>Verify Email</a>";
             mail.IsBodyHtml = true;
 
-            SmtpClient smtp = new SmtpClient("smpt.example.com");
-            smtp.Port = 587;
-            smtp.Credentials = new NetworkCredential("your-email@example.com", "your-email-password");
-            smtp.EnableSsl = true;
-            //smtp.Send(mail);
+            using var smtp = new SmtpClient("smtp.example.com")
+            {
+                Port = 587,
+                Credentials = new NetworkCredential(
+                    "your-email@example.com",
+                    "your-email-password"),
+                EnableSsl = true
+            };
+
+            try
+            {
+                // smtp.Send(mail);
+            }
+            catch
+            {
+                throw new InvalidOperationException("Failed to send verification email.");
+            }
         }
     }
 }

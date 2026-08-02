@@ -3,11 +3,13 @@ using MaskaniDataAccessLayer.DTOs;
 
 namespace MaskaniDataAccess.Interfaces
 {
-    public interface IOwnerRepository:IBasicRepository<clsOwnerDTO,clsAddOwnerDTO,clsUpdateOwnerDTO>
+    public interface IOwnerRepository
+        : IBasicRepository<clsOwnerDTO, clsAddOwnerDTO, clsUpdateOwnerDTO>
     {
-        public Task<bool> ChangePasswordAsync(int OwnerID, string newPassword);
-        public Task<clsOwnerDTO> LoginAsync(string email, string Password);
-        Task<clsOwnerDTO?> GetByEmailAsync(string email); // <-- Added method
-        Task<clsOwnerDTO> GetOwnerByPersonID(int PersonID);
+        Task<bool> ChangePasswordAsync(int ownerId, string newPassword);
+
+        Task<clsOwnerDTO?> GetByEmailAsync(string email);
+
+        Task<clsOwnerDTO?> GetOwnerByPersonID(int personId);
     }
 }

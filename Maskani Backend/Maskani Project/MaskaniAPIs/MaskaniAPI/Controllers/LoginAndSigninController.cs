@@ -1,266 +1,571 @@
-﻿using System.Numerics;
+﻿using System.Security.Claims;
 using DataAccessLayer;
 using MaskaniBusinessLayer;
 using MaskaniDataAccess.DTOs;
 using MaskaniDataAccessLayer.DTOs;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Http.HttpResults;
-using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace MaskaniAPI.Controllers
 {
-    [Route("api/LoginAndSignin")]
     [ApiController]
+    [Route("api/LoginAndSignin")]
     public class LoginAndSigninController : ControllerBase
     {
         private readonly PeopleService _peopleService;
         private readonly StudentService _studentService;
         private readonly OwnerService _ownerService;
         private readonly UserService _userService;
-        public LoginAndSigninController(PeopleService peopleService, StudentService studentService, OwnerService ownerService, UserService userService)
+        private readonly JwtService _jwtService;
+
+        public LoginAndSigninController(
+            PeopleService peopleService,
+            StudentService studentService,
+            OwnerService ownerService,
+            UserService userService,
+            JwtService jwtService)
         {
             _peopleService = peopleService;
             _studentService = studentService;
             _ownerService = ownerService;
             _userService = userService;
+            _jwtService = jwtService;
         }
 
+        [HttpPost("Login")]
+        [EnableRateLimiting("AuthPolicy")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-        [ProducesResponseType(StatusCodes.Status200OK)]
-        [HttpPost("Login")]
-        public async Task<IActionResult> Login([FromBody] clsLoginRequestDTO loginRequest)
+        public async Task<IActionResult> Login(
+            [FromBody] clsLoginRequestDTO loginRequest)
         {
-            if (loginRequest == null || string.IsNullOrWhiteSpace(loginRequest.Email) || string.IsNullOrWhiteSpace(loginRequest.Password))
+            if (loginRequest == null ||
+                string.IsNullOrWhiteSpace(loginRequest.Email) ||
+                string.IsNullOrWhiteSpace(loginRequest.Password))
             {
-                return BadRequest(new { message = "Email and password are required." });
-            }
-            try
-            {
-                var people = await _peopleService.GetAllPeopleAsync();
-                var person = people.FirstOrDefault(x => x.Email.Equals(loginRequest.Email, StringComparison.OrdinalIgnoreCase));
-                if (person == null)
-                    return Unauthorized(new { message = "Invalid email or password" });
-
-                string Role = person.Role.ToString().Trim();
-                switch (Role)
+                return BadRequest(new ProblemDetails
                 {
-                    case "Owner":
-                        {
-
-                            clsOwnerDTO? owner = new clsOwnerDTO();
-                            owner = await _ownerService.LoginAsync(loginRequest.Email, loginRequest.Password);
-                            if (owner != null)
-                                return Ok(owner);
-                            else
-                                return BadRequest("Invalid Email or Password");
-
-                        }
-
-
-                    case "Student":
-                        {
-                            clsStudentDTO? student = new clsStudentDTO();
-                            student = await _studentService.LoginAsync(loginRequest.Email, loginRequest.Password);
-                            if (student != null)
-                                return Ok(student);
-                            else
-                                return BadRequest("Invalid Email or Password");
-                        }
-
-
-                    case "User":
-                        {
-                            clsUserDTO? user = new clsUserDTO();
-                            user = await _userService.LoginAsync(loginRequest.Email, loginRequest.Password);
-                            if (user != null)
-                                return Ok(user);
-                            else
-                                return BadRequest("Invalid Email or Password");
-                        }
-
-                    default:
-                        return Unauthorized(new { message = "Invalid role specified." });
-
-                }
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, new { message = "Internal server error." });
-            }
-        }
-
-        [ProducesResponseType(StatusCodes.Status400BadRequest)]
-        [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status400BadRequest)]
-
-        [HttpPost("register")]
-        public async Task<IActionResult> Register([FromBody] clsUnifiedRegisterDTO dto)
-        {
-            if (dto == null || string.IsNullOrWhiteSpace(dto.Email) || string.IsNullOrWhiteSpace(dto.Password))
-                return BadRequest(new { message = "Email and password are required." });
-
-            try
-            {
-                string hashedPassword = clsHashing.HashPassword(dto.Password);
-                int newId = -1;
-                if (!await _peopleService.DoesPersonExistByEmailAsync(dto.Email))
-                {
-
-                    switch (dto.Role?.Trim())
-                    {
-                        case "User":
-                            newId = await _userService.AddUserAsync(new clsAddUserDTO
-                            {
-                                FirstName = dto.FirstName,
-                                LastName = dto.LastName,
-                                Phone = dto.Phone,
-                                Email = dto.Email,
-                                Password = hashedPassword
-                            });
-                            break;
-
-                        case "Student":
-                            newId = await _studentService.AddStudentAsync(new clsAddStudentDTO
-                            {
-                                FirstName = dto.FirstName,
-                                LastName = dto.LastName,
-                                Phone = dto.Phone,
-                                Email = dto.Email,
-                                Password = hashedPassword
-                            });
-                            break;
-
-                        case "Owner":
-                            newId = await _ownerService.AddOwnerAsync(new clsAddOwnerDTO
-                            {
-                                FirstName = dto.FirstName,
-                                LastName = dto.LastName,
-                                Phone = dto.Phone,
-                                Email = dto.Email,
-                                Password = hashedPassword
-                            });
-                            break;
-
-                        default:
-                            return BadRequest(new { message = "Invalid role specified. Use 'User', 'Student', or 'Owner'." });
-                    }
-
-                    return Ok(new { id = newId, role = dto.Role });
-                }
-                else
-                {
-                    return BadRequest(new { message = "Email already exists." });
-                }
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, new { message = "Registration failed.", error = ex.Message });
-            }
-        }
-
-
-        [ProducesResponseType(StatusCodes.Status400BadRequest)]
-        [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status400BadRequest)]
-        [HttpPut("Update/{ID}")]
-        public async Task<IActionResult> Update([FromBody] clsUnifiedUpdateDTO dto, int ID)
-        {
-            if (dto == null || ID < 1 || string.IsNullOrWhiteSpace(dto.Email) || string.IsNullOrWhiteSpace(dto.Phone) ||
-                string.IsNullOrWhiteSpace(dto.FirstName) || string.IsNullOrWhiteSpace(dto.LastName) ||
-                string.IsNullOrWhiteSpace(dto.Password) || string.IsNullOrWhiteSpace(dto.newPassword))
-                return BadRequest(new { message = "Invalid Data" });
-
-            var person = await _peopleService.GetPersonByIdAsync(ID);
-            if (person == null)
-                return NotFound(new { message = "Person not found." });
-
-            try
-            {
-                string role = person.Role.ToString().Trim();
-                bool updateSuccess = false;
-
-                if (await _peopleService.DoesPersonExistByEmailAsync(dto.Email))
-                {
-
-                    switch (role)
-                    {
-                        case "Owner":
-                            var owner = await _ownerService.GetOwnerByPersonID(ID);
-                            if (owner == null)
-                                return NotFound(new { message = "Owner not found." });
-
-                            updateSuccess = await _ownerService.UpdateOwnerAsync(new clsUpdateOwnerDTO
-                            {
-                                PersonID = ID,
-                                OwnerID = owner.OwnerID,
-                                FirstName = dto.FirstName,
-                                LastName = dto.LastName,
-                                Phone = dto.Phone,
-                                Email = dto.Email,
-                                Password = clsHashing.HashPassword(dto.newPassword)
-                            });
-                            break;
-
-                        case "Student":
-                            var student = await _studentService.GetStudentByPersonIDAsync(ID);
-                            if (student == null)
-                                return NotFound(new { message = "Student not found." });
-
-
-                            updateSuccess = await _studentService.UpdateStudentAsync(new clsUpdateStudentDTO
-                            {
-                                PersonID = ID,
-                                StudentID = student.StudentID,
-                                FirstName = dto.FirstName,
-                                LastName = dto.LastName,
-                                Phone = dto.Phone,
-                                Email = dto.Email,
-                                Password = clsHashing.HashPassword(dto.newPassword)
-                            });
-                            break;
-
-                        case "User":
-                            var user = await _userService.GetUserByPersonID(ID);
-                            if (user == null)
-                                return NotFound(new { message = "User not found." });
-
-                            updateSuccess = await _userService.UpdateUserAsync(new clsUpdateUserDTO
-                            {
-                                PersonID = ID,
-                                UserID = user.UserID,
-                                FirstName = dto.FirstName,
-                                LastName = dto.LastName,
-                                Phone = dto.Phone,
-                                Email = dto.Email,
-                                Password = clsHashing.HashPassword(dto.newPassword)
-                            });
-                            break;
-                    }
-                }
-                else
-                {
-                    return BadRequest(new { message = "Email already exists." });
-                }
-
-                if (!updateSuccess)
-                    return StatusCode(500, new { message = "Failed to update the record." });
-
-                return Ok(new
-                {
-                    PersonID = ID,
-                    FirstName = dto.FirstName,
-                    LastName = dto.LastName,
-                    Phone = dto.Phone,
-                    Email = dto.Email
+                    Title = "Email and password are required.",
+                    Status = StatusCodes.Status400BadRequest
                 });
             }
-            catch (Exception ex)
+
+            string normalizedEmail = loginRequest.Email.Trim();
+
+            var people = await _peopleService.GetAllPeopleAsync();
+
+            var person = people.FirstOrDefault(x =>
+                string.Equals(
+                    x.Email,
+                    normalizedEmail,
+                    StringComparison.OrdinalIgnoreCase));
+
+            if (person == null)
             {
-                return StatusCode(500, new { message = "Internal server error.", error = ex.Message });
+                return Unauthorized(new ProblemDetails
+                {
+                    Title = "Invalid email or password.",
+                    Status = StatusCodes.Status401Unauthorized
+                });
             }
+
+            switch (person.Role.Trim().ToLowerInvariant())
+            {
+                case "owner":
+                    {
+                        var owner = await _ownerService.LoginAsync(
+                            normalizedEmail,
+                            loginRequest.Password);
+
+                        if (owner == null)
+                        {
+                            return Unauthorized(new ProblemDetails
+                            {
+                                Title = "Invalid email or password.",
+                                Status = StatusCodes.Status401Unauthorized
+                            });
+                        }
+
+                        var token = _jwtService.GenerateToken(
+                            owner.PersonID,
+                            owner.Email,
+                            "Owner");
+
+                        return Ok(new
+                        {
+                            token,
+                            user = owner
+                        });
+                    }
+
+                case "student":
+                    {
+                        var student = await _studentService.LoginAsync(
+                            normalizedEmail,
+                            loginRequest.Password);
+
+                        if (student == null)
+                        {
+                            return Unauthorized(new ProblemDetails
+                            {
+                                Title = "Invalid email or password.",
+                                Status = StatusCodes.Status401Unauthorized
+                            });
+                        }
+
+                        var token = _jwtService.GenerateToken(
+                            student.PersonID,
+                            student.Email,
+                            "Student");
+
+                        return Ok(new
+                        {
+                            token,
+                            user = student
+                        });
+                    }
+
+                case "user":
+                    {
+                        var user = await _userService.LoginAsync(
+                            normalizedEmail,
+                            loginRequest.Password);
+
+                        if (user == null)
+                        {
+                            return Unauthorized(new ProblemDetails
+                            {
+                                Title = "Invalid email or password.",
+                                Status = StatusCodes.Status401Unauthorized
+                            });
+                        }
+
+                        var token = _jwtService.GenerateToken(
+                            user.PersonID,
+                            user.Email,
+                            "User");
+
+                        return Ok(new
+                        {
+                            token,
+                            user
+                        });
+                    }
+
+                default:
+                    return Unauthorized(new ProblemDetails
+                    {
+                        Title = "Invalid email or password.",
+                        Status = StatusCodes.Status401Unauthorized
+                    });
+            }
+        }
+
+        [HttpPost("Register")]
+        [EnableRateLimiting("AuthPolicy")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status409Conflict)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> Register(
+    [FromBody] clsUnifiedRegisterDTO dto)
+        {
+            string normalizedRole = dto.Role.Trim().ToLowerInvariant();
+            string normalizedEmail = dto.Email.Trim();
+
+            if (await _peopleService.DoesPersonExistByEmailAsync(normalizedEmail))
+            {
+                return Conflict(new ProblemDetails
+                {
+                    Title = "Email already exists.",
+                    Status = StatusCodes.Status409Conflict
+                });
+            }
+
+            int newId;
+            string createdRole;
+
+            switch (normalizedRole)
+            {
+                case "student":
+                    newId = await _studentService.AddStudentAsync(
+                        new clsAddStudentDTO
+                        {
+                            FirstName = dto.FirstName.Trim(),
+                            LastName = dto.LastName.Trim(),
+                            Phone = dto.Phone.Trim(),
+                            Email = normalizedEmail,
+                            Password = dto.Password
+                        });
+
+                    createdRole = "Student";
+                    break;
+
+                case "owner":
+                    newId = await _ownerService.AddOwnerAsync(
+                        new clsAddOwnerDTO
+                        {
+                            FirstName = dto.FirstName.Trim(),
+                            LastName = dto.LastName.Trim(),
+                            Phone = dto.Phone.Trim(),
+                            Email = normalizedEmail,
+                            Password = dto.Password
+                        });
+
+                    createdRole = "Owner";
+                    break;
+
+                default:
+                    return BadRequest(new ProblemDetails
+                    {
+                        Title = "Invalid role specified.",
+                        Detail =
+                            "Public registration supports only Student or Owner accounts.",
+                        Status = StatusCodes.Status400BadRequest
+                    });
+            }
+
+            return Ok(new
+            {
+                id = newId,
+                role = createdRole
+            });
+        }
+
+        [Authorize]
+        [HttpPut("Update/{id:int}")]
+        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status409Conflict)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> Update(
+            int id,
+            [FromBody] clsUnifiedUpdateDTO dto)
+        {
+            var claim =
+                User.FindFirst(ClaimTypes.NameIdentifier);
+
+            if (claim == null ||
+                !int.TryParse(claim.Value, out int personId))
+            {
+                return Unauthorized(new ProblemDetails
+                {
+                    Title = "Authentication is required.",
+                    Status = StatusCodes.Status401Unauthorized
+                });
+            }
+
+            if (personId != id)
+                return Forbid();
+
+            var person =
+                await _peopleService.GetPersonByIdAsync(personId);
+
+            if (person == null)
+            {
+                return NotFound(new ProblemDetails
+                {
+                    Title = "Person not found.",
+                    Status = StatusCodes.Status404NotFound
+                });
+            }
+
+            string normalizedEmail = dto.Email.Trim();
+
+            if (!string.Equals(
+                    person.Email,
+                    normalizedEmail,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                bool emailExists =
+                    await _peopleService
+                        .DoesPersonExistByEmailAsync(normalizedEmail);
+
+                if (emailExists)
+                {
+                    return Conflict(new ProblemDetails
+                    {
+                        Title = "Email already exists.",
+                        Status = StatusCodes.Status409Conflict
+                    });
+                }
+            }
+
+            bool success;
+
+            switch (person.Role.Trim().ToLowerInvariant())
+            {
+                case "owner":
+                    {
+                        var owner =
+                            await _ownerService.GetOwnerByPersonID(personId);
+
+                        if (owner == null)
+                        {
+                            return NotFound(new ProblemDetails
+                            {
+                                Title = "Owner not found.",
+                                Status = StatusCodes.Status404NotFound
+                            });
+                        }
+
+                        success = await _ownerService.UpdateOwnerAsync(
+                            new clsUpdateOwnerDTO
+                            {
+                                PersonID = personId,
+                                OwnerID = owner.OwnerID,
+                                FirstName = dto.FirstName.Trim(),
+                                LastName = dto.LastName.Trim(),
+                                Phone = dto.Phone.Trim(),
+                                Email = normalizedEmail
+                            });
+
+                        break;
+                    }
+
+                case "student":
+                    {
+                        var student =
+                            await _studentService
+                                .GetStudentByPersonIDAsync(personId);
+
+                        if (student == null)
+                        {
+                            return NotFound(new ProblemDetails
+                            {
+                                Title = "Student not found.",
+                                Status = StatusCodes.Status404NotFound
+                            });
+                        }
+
+                        success = await _studentService.UpdateStudentAsync(
+                            new clsUpdateStudentDTO
+                            {
+                                PersonID = personId,
+                                StudentID = student.StudentID,
+                                FirstName = dto.FirstName.Trim(),
+                                LastName = dto.LastName.Trim(),
+                                Phone = dto.Phone.Trim(),
+                                Email = normalizedEmail
+                            });
+
+                        break;
+                    }
+
+                case "user":
+                    {
+                        var user =
+                            await _userService.GetUserByPersonID(personId);
+
+                        if (user == null)
+                        {
+                            return NotFound(new ProblemDetails
+                            {
+                                Title = "User not found.",
+                                Status = StatusCodes.Status404NotFound
+                            });
+                        }
+
+                        success = await _userService.UpdateUserAsync(
+                            new clsUpdateUserDTO
+                            {
+                                PersonID = personId,
+                                UserID = user.UserID,
+                                FirstName = dto.FirstName.Trim(),
+                                LastName = dto.LastName.Trim(),
+                                Phone = dto.Phone.Trim(),
+                                Email = normalizedEmail
+                            });
+
+                        break;
+                    }
+
+                default:
+                    return Unauthorized(new ProblemDetails
+                    {
+                        Title = "Account could not be verified.",
+                        Status = StatusCodes.Status401Unauthorized
+                    });
+            }
+
+            if (!success)
+            {
+                throw new InvalidOperationException(
+                    "Failed to update account.");
+            }
+
+            return NoContent();
+        }
+
+
+        [Authorize]
+        [HttpPost("ChangePassword")]
+        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> ChangePassword(
+    [FromBody] clsChangePasswordDTO dto)
+        {
+            var claim = User.FindFirst(ClaimTypes.NameIdentifier);
+
+            if (claim == null ||
+                !int.TryParse(claim.Value, out int personId))
+            {
+                return Unauthorized(new ProblemDetails
+                {
+                    Title = "Authentication is required.",
+                    Status = StatusCodes.Status401Unauthorized
+                });
+            }
+
+            var person = await _peopleService.GetPersonByIdAsync(personId);
+
+            if (person == null)
+            {
+                return NotFound(new ProblemDetails
+                {
+                    Title = "Account not found.",
+                    Status = StatusCodes.Status404NotFound
+                });
+            }
+
+            string normalizedRole =
+                person.Role.Trim().ToLowerInvariant();
+
+            bool currentPasswordIsValid = false;
+            bool passwordChanged = false;
+
+            switch (normalizedRole)
+            {
+                case "owner":
+                    currentPasswordIsValid =
+                        await _ownerService.VerifyPasswordAsync(
+                            person.Email,
+                            dto.CurrentPassword);
+                    break;
+
+                case "student":
+                    currentPasswordIsValid =
+                        await _studentService.VerifyPasswordAsync(
+                            person.Email,
+                            dto.CurrentPassword);
+                    break;
+
+                case "user":
+                    currentPasswordIsValid =
+                        await _userService.VerifyPasswordAsync(
+                            person.Email,
+                            dto.CurrentPassword);
+                    break;
+
+                default:
+                    return Unauthorized(new ProblemDetails
+                    {
+                        Title = "Account could not be verified.",
+                        Status = StatusCodes.Status401Unauthorized
+                    });
+            }
+
+            if (!currentPasswordIsValid)
+            {
+                return BadRequest(new ProblemDetails
+                {
+                    Title = "Current password is incorrect.",
+                    Status = StatusCodes.Status400BadRequest
+                });
+            }
+
+            switch (normalizedRole)
+            {
+                case "owner":
+                    {
+                        var owner =
+                            await _ownerService.GetOwnerByPersonID(personId);
+
+                        if (owner == null)
+                        {
+                            return NotFound(new ProblemDetails
+                            {
+                                Title = "Owner account not found.",
+                                Status = StatusCodes.Status404NotFound
+                            });
+                        }
+
+                        passwordChanged =
+                            await _ownerService.ChangePasswordAsync(
+                                owner.OwnerID,
+                                dto.NewPassword);
+
+                        break;
+                    }
+
+                case "student":
+                    {
+                        var student =
+                            await _studentService.GetStudentByPersonIDAsync(personId);
+
+                        if (student == null)
+                        {
+                            return NotFound(new ProblemDetails
+                            {
+                                Title = "Student account not found.",
+                                Status = StatusCodes.Status404NotFound
+                            });
+                        }
+
+                        passwordChanged =
+                            await _studentService.ChangePasswordAsync(
+                                student.StudentID,
+                                dto.NewPassword);
+
+                        break;
+                    }
+
+                case "user":
+                    {
+                        var user =
+                            await _userService.GetUserByPersonID(personId);
+
+                        if (user == null)
+                        {
+                            return NotFound(new ProblemDetails
+                            {
+                                Title = "User account not found.",
+                                Status = StatusCodes.Status404NotFound
+                            });
+                        }
+
+                        passwordChanged =
+                            await _userService.ChangePasswordAsync(
+                                user.UserID,
+                                dto.NewPassword);
+
+                        break;
+                    }
+
+                default:
+                    return Unauthorized(new ProblemDetails
+                    {
+                        Title = "Account could not be verified.",
+                        Status = StatusCodes.Status401Unauthorized
+                    });
+            }
+
+            if (!passwordChanged)
+            {
+                throw new InvalidOperationException(
+                    "Failed to change password.");
+            }
+
+            return NoContent();
         }
     }
 }

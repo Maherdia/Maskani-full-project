@@ -1,99 +1,200 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Net;
-using System.Text;
+﻿using System.Net;
 using System.Text.Json;
 using System.Text.RegularExpressions;
-using System.Threading.Tasks;
+using Microsoft.Extensions.Configuration;
 
 namespace MaskaniBusinessLayer.Utility
 {
-    public static class clsEmailValidator
+    public class clsEmailValidator
     {
-        public static bool IsValidEmailFormat(string email)
+        private static readonly Regex EmailRegex =
+            new(
+                @"^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$",
+                RegexOptions.Compiled |
+                RegexOptions.CultureInvariant);
+
+        private readonly HttpClient _httpClient;
+        private readonly string? _hunterApiKey;
+
+        public clsEmailValidator(
+            HttpClient httpClient,
+            IConfiguration configuration)
         {
-            string pattern = @"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$";
-            return Regex.IsMatch(email, pattern);
+            _httpClient = httpClient;
+
+            string? configuredApiKey =
+                configuration["Hunter:ApiKey"];
+
+            _hunterApiKey =
+                string.IsNullOrWhiteSpace(configuredApiKey)
+                    ? null
+                    : configuredApiKey.Trim();
         }
 
-        public static bool IsDomainValid(string email)
+        public bool IsValidEmailFormat(string email)
         {
+            if (string.IsNullOrWhiteSpace(email))
+            {
+                return false;
+            }
+
+            return EmailRegex.IsMatch(email.Trim());
+        }
+
+        public async Task<bool> IsDomainValidAsync(
+            string email)
+        {
+            if (!IsValidEmailFormat(email))
+            {
+                return false;
+            }
+
+            string normalizedEmail = email.Trim();
+
+            string domain =
+                normalizedEmail.Split('@', 2)[1];
+
             try
             {
-                string domain = email.Split('@')[1];
-                IPHostEntry host = Dns.GetHostEntry(domain);
-                return host.AddressList.Length > 0;
+                IPAddress[] addresses =
+                    await Dns.GetHostAddressesAsync(domain);
+
+                return addresses.Length > 0;
             }
             catch
             {
-                return false; // Domain does not exist
+                return false;
             }
         }
-        public static async Task<bool> VerifyUsingHunterAPI(string email)
-        {
-            string apiKey = "04bac30660e109c1bb624d3854683d78f4ddb4af"; // Your Hunter.io API key
-            string apiUrl = $"https://api.hunter.io/v2/email-verifier?email={email}&api_key={apiKey}";
 
-            using (HttpClient client = new HttpClient())
+        public async Task<bool> VerifyUsingHunterApiAsync(
+            string email)
+        {
+            if (!IsValidEmailFormat(email))
             {
-                try
+                return false;
+            }
+
+            /*
+             * Hunter is optional.
+             *
+             * When no Hunter API key is configured, the email has already
+             * passed local format and domain validation, so registration
+             * is allowed to continue.
+             */
+            if (string.IsNullOrWhiteSpace(_hunterApiKey))
+            {
+                return true;
+            }
+
+            string encodedEmail =
+                Uri.EscapeDataString(email.Trim());
+
+            string encodedApiKey =
+                Uri.EscapeDataString(_hunterApiKey);
+
+            string requestUrl =
+                "https://api.hunter.io/v2/email-verifier" +
+                $"?email={encodedEmail}" +
+                $"&api_key={encodedApiKey}";
+
+            try
+            {
+                using HttpResponseMessage response =
+                    await _httpClient.GetAsync(requestUrl);
+
+                if (!response.IsSuccessStatusCode)
                 {
-                    HttpResponseMessage response = await client.GetAsync(apiUrl);
-                    if (!response.IsSuccessStatusCode)
-                    {
-                        string errorResponse = await response.Content.ReadAsStringAsync();
-                        Console.WriteLine($"Error: {response.StatusCode} - {errorResponse}");
-                        return false;
-                    }
-
-                    string result = await response.Content.ReadAsStringAsync();
-                    Console.WriteLine($"API Response: {result}");
-
-                    // Parse the response more systematically using JsonDocument
-                    using (JsonDocument document = JsonDocument.Parse(result))
-                    {
-                        JsonElement root = document.RootElement;
-                        if (root.TryGetProperty("data", out JsonElement data))
-                        {
-                            // Get status
-                            string? status = data.TryGetProperty("status", out JsonElement statusElement) ? statusElement.GetString() : "";
-
-                            // Get result
-                            string? deliverability = data.TryGetProperty("result", out JsonElement resultElement) ? resultElement.GetString() : "";
-
-                            // Get disposable status
-                            bool isDisposable = data.TryGetProperty("disposable", out JsonElement disposableElement)
-                                ? disposableElement.GetBoolean() : false;
-
-                            // Check all conditions
-                            if (status == "valid" && deliverability == "deliverable" && !isDisposable)
-                            {
-                                return true;
-                            }
-                        }
-                    }
                     return false;
                 }
-                catch (Exception ex)
+
+                await using Stream responseStream =
+                    await response.Content.ReadAsStreamAsync();
+
+                using JsonDocument document =
+                    await JsonDocument.ParseAsync(responseStream);
+
+                if (!document.RootElement.TryGetProperty(
+                        "data",
+                        out JsonElement data))
                 {
-                    Console.WriteLine($"Exception in Hunter API verification: {ex.Message}");
                     return false;
                 }
+
+                string? status =
+                    data.TryGetProperty(
+                        "status",
+                        out JsonElement statusElement)
+                        ? statusElement.GetString()
+                        : null;
+
+                string? result =
+                    data.TryGetProperty(
+                        "result",
+                        out JsonElement resultElement)
+                        ? resultElement.GetString()
+                        : null;
+
+                bool isDisposable =
+                    data.TryGetProperty(
+                        "disposable",
+                        out JsonElement disposableElement) &&
+                    disposableElement.ValueKind ==
+                        JsonValueKind.True;
+
+                return string.Equals(
+                           status,
+                           "valid",
+                           StringComparison.OrdinalIgnoreCase) &&
+                       string.Equals(
+                           result,
+                           "deliverable",
+                           StringComparison.OrdinalIgnoreCase) &&
+                       !isDisposable;
+            }
+            catch (
+                HttpRequestException)
+            {
+                return false;
+            }
+            catch (
+                TaskCanceledException)
+            {
+                return false;
+            }
+            catch (
+                JsonException)
+            {
+                return false;
             }
         }
-        public static async Task<bool> IsEmailRealAsync(string email)
+
+        public async Task<bool> IsEmailRealAsync(
+            string email)
         {
-            //check in email format 
-            if (!clsEmailValidator.IsValidEmailFormat(email))
+            if (!IsValidEmailFormat(email))
+            {
                 return false;
+            }
 
-            //check if domain is valid
-            if (!clsEmailValidator.IsDomainValid(email))
+            string normalizedEmail = email.Trim();
+
+            if (!await IsDomainValidAsync(normalizedEmail))
+            {
                 return false;
+            }
 
-            //  Verify using Hunter.io API
-            return await clsEmailValidator.VerifyUsingHunterAPI(email);
+            /*
+             * Until Hunter approves your account, this returns true after
+             * successful format and domain validation.
+             */
+            if (string.IsNullOrWhiteSpace(_hunterApiKey))
+            {
+                return true;
+            }
+
+            return await VerifyUsingHunterApiAsync(
+                normalizedEmail);
         }
     }
 }

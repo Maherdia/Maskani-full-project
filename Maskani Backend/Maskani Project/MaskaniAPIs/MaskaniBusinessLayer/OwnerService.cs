@@ -1,5 +1,4 @@
 ﻿using DataAccessLayer;
-using MaskaniBusinessLayer.Utility;
 using MaskaniDataAccess.DTOs;
 using MaskaniDataAccess.Interfaces;
 using MaskaniDataAccessLayer.DTOs;
@@ -10,59 +9,142 @@ namespace MaskaniBusinessLayer
     {
         private readonly IOwnerRepository _ownerRepository;
 
-        public OwnerService(IOwnerRepository ownerRepository) => _ownerRepository = ownerRepository;
-        public async Task<int> AddOwnerAsync(clsAddOwnerDTO dto)
+        public OwnerService(IOwnerRepository ownerRepository)
         {
-            if (await clsEmailValidator.IsEmailRealAsync(dto.Email))
-            {
-                return await _ownerRepository.AddAsync(dto);
-            }
-            else
-            {
-                throw new ArgumentException("Invalid email address.");
-            }
+            _ownerRepository = ownerRepository;
         }
-        public async Task<bool> UpdateOwnerAsync(clsUpdateOwnerDTO dto)
+
+        public async Task<int> AddOwnerAsync(
+            clsAddOwnerDTO ownerDTO)
         {
-            if (await clsEmailValidator.IsEmailRealAsync(dto.Email))
+            var secureOwnerDTO = new clsAddOwnerDTO
             {
-                return await _ownerRepository.UpdateAsync(dto);
-            }
-            else
-            {
-                throw new ArgumentException("Invalid email address.");
-            }
+                FirstName = ownerDTO.FirstName,
+                LastName = ownerDTO.LastName,
+                Phone = ownerDTO.Phone,
+                Email = ownerDTO.Email,
+                Password = clsHashing.HashPassword(
+                    ownerDTO.Password)
+            };
+
+            return await _ownerRepository.AddAsync(
+                secureOwnerDTO);
         }
-        public async Task<bool> DeleteOwnerAsync(int ownerId) => await _ownerRepository.DeleteAsync(ownerId);
-        public async Task<List<clsOwnerDTO>> GetAllOwnersAsync() => await _ownerRepository.GetAllAsync();
-        public async Task<clsOwnerDTO?> GetOwnerByIdAsync(int ownerId) => await _ownerRepository.GetByIdAsync(ownerId);
-        public async Task<bool> ChangePasswordAsync(int ownerId, string newPassword) => 
-            await _ownerRepository.ChangePasswordAsync(ownerId, newPassword);
-        public async Task<clsOwnerDTO?> LoginAsync(string email, string password)
+
+        public async Task<bool> UpdateOwnerAsync(
+            clsUpdateOwnerDTO updateDTO)
         {
-            var owner = await _ownerRepository.GetByEmailAsync(email);
+            return await _ownerRepository.UpdateAsync(
+                updateDTO);
+        }
 
-            if (owner == null)
-                return null;
+        public async Task<bool> DeleteOwnerAsync(int ownerId)
+        {
+            return await _ownerRepository.DeleteAsync(
+                ownerId);
+        }
 
-            if (!clsHashing.VerifyPassword(password, owner.Password))
+        public async Task<List<clsOwnerDTO>> GetAllOwnersAsync()
+        {
+            return await _ownerRepository.GetAllAsync();
+        }
+
+        public async Task<clsOwnerDTO?> GetOwnerByIdAsync(
+            int ownerId)
+        {
+            return await _ownerRepository.GetByIdAsync(
+                ownerId);
+        }
+
+        public async Task<clsOwnerDTO?> GetOwnerByPersonID(
+            int personId)
+        {
+            return await _ownerRepository.GetOwnerByPersonID(
+                personId);
+        }
+
+        public async Task<clsOwnerDTO?> GetByEmailAsync(
+            string email)
+        {
+            return await _ownerRepository.GetByEmailAsync(
+                email.Trim());
+        }
+
+        public async Task<bool> ChangePasswordAsync(
+            int ownerId,
+            string plainTextNewPassword)
+        {
+            if (string.IsNullOrWhiteSpace(plainTextNewPassword))
+            {
+                throw new ArgumentException(
+                    "New password is required.",
+                    nameof(plainTextNewPassword));
+            }
+
+            string passwordHash =
+                clsHashing.HashPassword(
+                    plainTextNewPassword);
+
+            return await _ownerRepository.ChangePasswordAsync(
+                ownerId,
+                passwordHash);
+        }
+
+        public async Task<clsOwnerDTO?> LoginAsync(
+            string email,
+            string password)
+        {
+            if (string.IsNullOrWhiteSpace(email) ||
+                string.IsNullOrWhiteSpace(password))
+            {
                 return null;
+            }
+
+            var owner =
+                await _ownerRepository.GetByEmailAsync(
+                    email.Trim());
+
+            if (owner == null ||
+                string.IsNullOrWhiteSpace(owner.Password))
+            {
+                return null;
+            }
+
+            if (!clsHashing.VerifyPassword(
+                    password,
+                    owner.Password))
+            {
+                return null;
+            }
 
             owner.Password = null;
 
             return owner;
         }
 
-        public async Task<bool> VerifyPasswordAsync(string email, string password)
+        public async Task<bool> VerifyPasswordAsync(
+            string email,
+            string password)
         {
-            var owner = await _ownerRepository.GetByEmailAsync(email);
-
-            if (owner == null)
+            if (string.IsNullOrWhiteSpace(email) ||
+                string.IsNullOrWhiteSpace(password))
+            {
                 return false;
+            }
 
-            return clsHashing.VerifyPassword(password, owner.Password);
+            var owner =
+                await _ownerRepository.GetByEmailAsync(
+                    email.Trim());
+
+            if (owner == null ||
+                string.IsNullOrWhiteSpace(owner.Password))
+            {
+                return false;
+            }
+
+            return clsHashing.VerifyPassword(
+                password,
+                owner.Password);
         }
-        public async Task<clsOwnerDTO> GetOwnerByPersonID(int personID)=> await _ownerRepository.GetOwnerByPersonID(personID);
-        public async Task<clsOwnerDTO?> GetByEmailAsync(string email)=> await _ownerRepository.GetByEmailAsync(email);
     }
 }
